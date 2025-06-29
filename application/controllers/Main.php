@@ -983,9 +983,9 @@ class Main extends CI_Controller {
     $session_condition = array('session_id' => $session_id);
     $checksession = $this->Operations->SearchByCondition($session_table, $session_condition);
     
-    if (empty($checksession) || $checksession[0]['session_id'] !== $session_id) {
+    if (empty($checksession) {
         $response['status'] = 'fail';
-        $response['message'] = 'Invalid session_id or user not logged in';
+        $response['message'] = 'Invalid session or user not logged in';
         $response['data'] = null;
         echo json_encode($response);
         exit();
@@ -1005,7 +1005,7 @@ class Main extends CI_Controller {
     $conversionRate = $buyrate[0]['kes'];
     $boughtbuy = $buyrate[0]['bought_at'];
     $amountUSD = round($amount / $conversionRate, 2);
-
+    
     // Validate amount
     if ($amountUSD < 1) {
         $response['status'] = 'error';
@@ -1021,146 +1021,175 @@ class Main extends CI_Controller {
         exit();
     }
 
-    // Get agent Deriv token (should be stored securely)
-    $agent_token = 'DidPRclTKE0WYtT'; // Replace with your actual agent token
-    $app_id = 76420; // Replace with your actual app ID
+    // Prepare transaction data
+    $transaction_number = $this->transaction_number;
+    $phone = $this->Operations->getCustomerPhone($wallet_id);
     
-    // Prepare Deriv transfer
-    $endpoint = 'ws.binaryws.com';
-    $url = "wss://{$endpoint}/websockets/v3?app_id={$appId}";
+    // Calculate charges
+    $chargePercent = 0;
+    $newcharge = ($buyrate[0]['kes'] - $boughtbuy) * $amountUSD;
+    $amountKESAfterCharge = $amount;
+    $totalAmountKES = $amountKESAfterCharge + $amount;
+
+    // Create deposit request
+    $deposit_data = array(
+        'transaction_id' => $transaction_id,
+        'transaction_number' => $transaction_number,
+        'wallet_id' => $wallet_id,
+        'cr_number' => $crNumber,
+        'amount' => $amountUSD,
+        'rate' => $conversionRate,
+        'status' => 0, // Pending status
+        'deposited' => 0,
+        'bought_at' => $boughtbuy,
+        'request_date' => $this->date,
+    );
     
-    try {
-        $client = new Client($url, [], ['timeout' => 10]);
+    $save = $this->Operations->Create('deriv_deposit_request', $deposit_data);
+    
+    if (!$save) {
+        $response['status'] = 'error';
+        $response['message'] = 'Failed to create deposit request';
+        $response['data'] = null;
+        echo json_encode($response);
+        exit();
+    }
+
+    // Record transaction in ledgers
+    $description = 'Deposit to deriv';
+    $paymethod = 'STEPAKASH';
+    $currency = 'USD';
+    
+    // Customer ledger entry
+    $customer_ledger_data = array(
+        'transaction_id' => $transaction_id,
+        'transaction_number' => $transaction_number,
+        'description' => $description,
+        'pay_method' => $paymethod,
+        'wallet_id' => $wallet_id,
+        'paid_amount' => $amount,
+        'cr_dr' => 'dr',
+        'deriv' => 1,
+        'trans_date' => $this->date,
+        'currency' => $currency,
+        'amount' => $amountUSD,
+        'rate' => $conversionRate,
+        'chargePercent' => $chargePercent,
+        'charge' => $newcharge,
+        'total_amount' => $totalAmountKES,
+        'status' => 1,
+        'created_at' => $this->date,
+    );
+    
+    $save_customer_ledger = $this->Operations->Create('customer_ledger', $customer_ledger_data);
+    
+    // System ledger entry
+    $system_ledger_data = array(
+        'transaction_id' => $transaction_id,
+        'transaction_number' => $transaction_number,
+        'description' => $description,
+        'pay_method' => $paymethod,
+        'wallet_id' => $wallet_id,
+        'paid_amount' => $amount,
+        'cr_dr' => 'dr',
+        'deriv' => 1,
+        'trans_date' => $this->date,
+        'currency' => $currency,
+        'amount' => $amountUSD,
+        'rate' => $conversionRate,
+        'chargePercent' => $chargePercent,
+        'charge' => $newcharge,
+        'total_amount' => $totalAmountKES,
+        'status' => 1,
+        'created_at' => $this->date,
+    );
+    
+    $save_system_ledger = $this->Operations->Create('system_ledger', $system_ledger_data);
+    
+    if ($save_customer_ledger && $save_system_ledger) {
+        // Attempt to process the deposit automatically
+        $deposit_result = $this->processDerivDeposit($crNumber, $amountUSD, $transaction_id);
         
-        // 1. First authorize agent account
-        $client->send(json_encode(["authorize" => $agent_token]));
-        $auth_response = json_decode($client->receive(), true);
-        
-        if (!isset($auth_response['authorize'])) {
-            throw new Exception('Agent authorization failed');
-        }
-        
-        // 2. Transfer to user's Deriv account
-        $transfer_data = [
-            "paymentagent_transfer" => 1,
-            "amount" => $amountUSD,
-            "transfer_to" => $crNumber,
-            "req_id" => $transaction_id
-        ];
-        
-        $client->send(json_encode($transfer_data));
-        $transfer_response = json_decode($client->receive(), true);
-        
-        if (!isset($transfer_response['paymentagent_transfer'])) {
-            throw new Exception('Transfer failed: ' . ($transfer_response['error']['message'] ?? 'Unknown error'));
-        }
-        
-        // If we get here, transfer was successful
-        
-        // Record the transaction
-        $table = 'deriv_deposit_request';
-        $transaction_number = $this->transaction_number;
-        
-        $data = array(
-            'transaction_id' => $transaction_id,
-            'transaction_number' => $transaction_number,
-            'wallet_id' => $wallet_id,
-            'cr_number' => $crNumber,
-            'amount' => $amountUSD,
-            'rate' => $conversionRate,
-            'status' => 1, // Mark as completed
-            'deposited' => $amountUSD,
-            'bought_at' => $boughtbuy,
-            'request_date' => $this->date,
-        );
-        
-        $save = $this->Operations->Create($table, $data);
-        
-        // Calculate charges
-        $mycharge = ($buyrate[0]['kes'] - $boughtbuy);
-        $newcharge = (float)$mycharge * $amountUSD;
-        $chargePercent = 0;
-        $totalAmountKES = $amount + ($newcharge * $conversionRate);
-        
-        // Record in ledgers
-        $cr_dr = 'dr';
-        $customer_ledger_data = array(
-            'transaction_id' => $transaction_id,
-            'transaction_number' => $transaction_number,
-            'description' => 'Deposit to deriv',
-            'pay_method' => 'STEPAKASH',
-            'wallet_id' => $wallet_id,
-            'paid_amount' => $amount,
-            'cr_dr' => $cr_dr,
-            'deriv' => 1,
-            'trans_date' => $this->date,
-            'currency' => 'USD',
-            'amount' => $amountUSD,
-            'rate' => $conversionRate,
-            'chargePercent' => $chargePercent,
-            'charge' => $newcharge,
-            'total_amount' => $totalAmountKES,
-            'status' => 1,
-            'created_at' => $this->date,
-        );
-        
-        $save_customer_ledger = $this->Operations->Create('customer_ledger', $customer_ledger_data);
-        
-        $system_ledger_data = $customer_ledger_data;
-        $save_system_ledger = $this->Operations->Create('system_ledger', $system_ledger_data);
-        
-        if ($save && $save_customer_ledger && $save_system_ledger) {
-            // Get user phone for notification
-            $condition1 = array('wallet_id' => $wallet_id);
-            $searchUser = $this->Operations->SearchByCondition('customers', $condition1);
-            $phone = $searchUser[0]['phone'];
+        if ($deposit_result['success']) {
+            // Update status if automatic deposit succeeded
+            $update_data = array('status' => 1, 'deposited' => $amountUSD);
+            $this->Operations->UpdateData('deriv_deposit_request', 
+                array('transaction_id' => $transaction_id), 
+                $update_data);
             
-            $message = 'Txn ID: ' . $transaction_number . ', a deposit of ' . $amountUSD . ' USD has been successfully processed to your Deriv account ' . $crNumber;
-            
-            // Send notifications
-            $this->Operations->sendSMS($phone, $message);
-            $stevephone = '0703416091';
-            $this->Operations->sendSMS($stevephone, $message);
-            
-            $response['status'] = 'success';
-            $response['message'] = $message;
-            $response['data'] = null;
+            $message = 'Txn ID: ' . $transaction_number . ', a deposit of ' . $amountUSD . ' USD has been successfully processed.';
         } else {
-            throw new Exception('Failed to record transaction');
+            // Automatic deposit failed - admin will need to process manually
+            $message = 'Txn ID: ' . $transaction_number . ', a deposit of ' . $amountUSD . ' USD is pending processing.';
         }
         
-    } catch (Exception $e) {
-        // If automatic transfer fails, create pending request for manual processing
-        $table = 'deriv_deposit_request';
-        $transaction_number = $this->transaction_number;
+        // Send notifications
+        $this->Operations->sendSMS($phone, $message);
+        $admin_phone = '0703416091';
+        $this->Operations->sendSMS($admin_phone, $message);
         
-        $data = array(
+        $response['status'] = 'success';
+        $response['message'] = $message;
+        $response['data'] = array(
             'transaction_id' => $transaction_id,
-            'transaction_number' => $transaction_number,
-            'wallet_id' => $wallet_id,
-            'cr_number' => $crNumber,
-            'amount' => $amountUSD,
-            'rate' => $conversionRate,
-            'status' => 0, // Mark as pending
-            'deposited' => 0,
-            'bought_at' => $boughtbuy,
-            'request_date' => $this->date,
+            'amount_usd' => $amountUSD,
+            'cr_number' => $crNumber
         );
-        
-        $save = $this->Operations->Create($table, $data);
-        
-        if ($save) {
-            $response['status'] = 'pending';
-            $response['message'] = 'Deposit request received and pending manual processing';
-            $response['data'] = null;
-        } else {
-            $response['status'] = 'error';
-            $response['message'] = 'Failed to initiate deposit request: ' . $e->getMessage();
-            $response['data'] = null;
-        }
+    } else {
+        $response['status'] = 'error';
+        $response['message'] = 'Transaction recorded but deposit processing failed';
+        $response['data'] = null;
     }
     
     echo json_encode($response);
+}
+
+private function processDerivDeposit($crNumber, $amountUSD, $transaction_id) {
+    $appId = 76420; // Your Deriv app ID
+    $token = 'DidPRclTKE0WYtT'; // Your Deriv token
+    
+    try {
+        $endpoint = 'ws.binaryws.com';
+        $url = "wss://{$endpoint}/websockets/v3?app_id={$appId}";
+        $client = new Client($url, [], ['timeout' => 10]);
+        
+        // Authorize with token
+        $client->send(json_encode(["authorize" => $token]));
+        $auth_response = json_decode($client->receive(), true);
+        
+        if (!isset($auth_response['authorize'])) {
+            return ['success' => false, 'message' => 'Authorization failed'];
+        }
+        
+        // Prepare transfer request
+        $transfer_request = [
+            "paymentagent_transfer" => 1,
+            "amount" => $amountUSD,
+            "transfer_to" => $crNumber,
+            "req_id" => (int)$transaction_id
+        ];
+        
+        $client->send(json_encode($transfer_request));
+        $transfer_response = json_decode($client->receive(), true);
+        
+        if (isset($transfer_response['error'])) {
+            error_log('Deriv transfer error: ' . print_r($transfer_response['error'], true));
+            return ['success' => false, 'message' => $transfer_response['error']['message']];
+        }
+        
+        if (isset($transfer_response['paymentagent_transfer'])) {
+            if ($transfer_response['paymentagent_transfer']['status'] === 'success') {
+                return ['success' => true, 'message' => 'Transfer successful'];
+            } else {
+                return ['success' => false, 'message' => 'Transfer failed: ' . $transfer_response['paymentagent_transfer']['status']];
+            }
+        }
+        
+        return ['success' => false, 'message' => 'Unexpected response from Deriv'];
+    } catch (Exception $e) {
+        error_log('Deriv API error: ' . $e->getMessage());
+        return ['success' => false, 'message' => 'Connection error: ' . $e->getMessage()];
+    }
 }
 
 	
