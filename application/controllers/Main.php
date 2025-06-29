@@ -983,7 +983,7 @@ class Main extends CI_Controller {
     $session_condition = array('session_id' => $session_id);
     $checksession = $this->Operations->SearchByCondition($session_table, $session_condition);
     
-    if (empty($checksession) {
+    if (empty($checksession)) {
         $response['status'] = 'fail';
         $response['message'] = 'Invalid session or user not logged in';
         $response['data'] = null;
