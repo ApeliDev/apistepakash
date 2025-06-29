@@ -959,6 +959,7 @@ class Main extends CI_Controller {
 
     // Fetch inputs
     $crNumber = $this->input->post('crNumber');
+    $crNumber = str_replace(' ', '', $crNumber);
     $amount = $this->input->post('amount');
     $session_id = $this->input->post('session_id');
     $transaction_id = $this->input->post('transaction_id');
@@ -978,8 +979,9 @@ class Main extends CI_Controller {
     }
 
     // Validate session
+    $session_table = 'login_session';
     $session_condition = array('session_id' => $session_id);
-    $checksession = $this->Operations->SearchByCondition('login_session', $session_condition);
+    $checksession = $this->Operations->SearchByCondition($session_table, $session_condition);
     
     if (empty($checksession) || $checksession[0]['session_id'] !== $session_id) {
         $response['status'] = 'fail';
@@ -992,7 +994,7 @@ class Main extends CI_Controller {
     $wallet_id = $checksession[0]['wallet_id'];
     $summary = $this->Operations->customer_transection_summary($wallet_id);
     
-    // Get current rates
+    // Get buy rate
     $buyratecondition = array('exchange_type'=>1,'service_type'=>1);
     $buyrate = $this->Operations->SearchByConditionBuy('exchange',$buyratecondition);
     
@@ -1019,60 +1021,145 @@ class Main extends CI_Controller {
         exit();
     }
 
-    // Create deposit request
-    $table = 'deriv_deposit_request';
-    $transaction_number = $this->transaction_number;
-    $data = array(
-        'transaction_id' => $transaction_id,
-        'transaction_number' => $transaction_number,
-        'wallet_id' => $wallet_id,
-        'cr_number' => $crNumber,
-        'amount' => $amountUSD,
-        'rate' => $conversionRate,
-        'status' => 0, // Pending status
-        'deposited' => 0,
-        'bought_at' => $boughtbuy,
-        'request_date' => $this->date,
-    );
+    // Get agent Deriv token (should be stored securely)
+    $agent_token = 'DidPRclTKE0WYtT'; // Replace with your actual agent token
+    $app_id = 76420; // Replace with your actual app ID
     
-    $save = $this->Operations->Create($table, $data);
+    // Prepare Deriv transfer
+    $endpoint = 'ws.binaryws.com';
+    $url = "wss://{$endpoint}/websockets/v3?app_id={$appId}";
     
-    if (!$save) {
-        $response['status'] = 'error';
-        $response['message'] = 'Failed to create deposit request';
-        $response['data'] = null;
-        echo json_encode($response);
-        exit();
-    }
-
-    // Attempt to process the deposit automatically
-    $deposit_result = $this->processDerivDeposit($crNumber, $amountUSD, $transaction_id);
-    
-    if ($deposit_result['success']) {
-        // If automatic deposit succeeded
-        $data['status'] = 1;
-        $data['deposited'] = $amountUSD;
-        $this->Operations->UpdateData($table, array('transaction_id' => $transaction_id), $data);
+    try {
+        $client = new Client($url, [], ['timeout' => 10]);
+        
+        // 1. First authorize agent account
+        $client->send(json_encode(["authorize" => $agent_token]));
+        $auth_response = json_decode($client->receive(), true);
+        
+        if (!isset($auth_response['authorize'])) {
+            throw new Exception('Agent authorization failed');
+        }
+        
+        // 2. Transfer to user's Deriv account
+        $transfer_data = [
+            "paymentagent_transfer" => 1,
+            "amount" => $amountUSD,
+            "transfer_to" => $crNumber,
+            "req_id" => $transaction_id
+        ];
+        
+        $client->send(json_encode($transfer_data));
+        $transfer_response = json_decode($client->receive(), true);
+        
+        if (!isset($transfer_response['paymentagent_transfer'])) {
+            throw new Exception('Transfer failed: ' . ($transfer_response['error']['message'] ?? 'Unknown error'));
+        }
+        
+        // If we get here, transfer was successful
         
         // Record the transaction
-        $this->recordDepositTransaction($wallet_id, $transaction_id, $transaction_number, $amount, $amountUSD, $conversionRate, $boughtbuy);
+        $table = 'deriv_deposit_request';
+        $transaction_number = $this->transaction_number;
         
-        $message = 'Txn ID: ' . $transaction_number . ', a deposit of ' . $amountUSD . ' USD has been successfully processed.';
-        $this->sendNotifications($checksession[0]['phone'], $message);
+        $data = array(
+            'transaction_id' => $transaction_id,
+            'transaction_number' => $transaction_number,
+            'wallet_id' => $wallet_id,
+            'cr_number' => $crNumber,
+            'amount' => $amountUSD,
+            'rate' => $conversionRate,
+            'status' => 1, // Mark as completed
+            'deposited' => $amountUSD,
+            'bought_at' => $boughtbuy,
+            'request_date' => $this->date,
+        );
         
-        $response['status'] = 'success';
-        $response['message'] = $message;
-        $response['data'] = null;
-    } else {
-        // Automatic deposit failed - mark for manual processing
-        $message = 'Txn ID: ' . $transaction_number . ', a deposit of ' . $amountUSD . ' USD is pending manual processing.';
-        $this->sendNotifications($checksession[0]['phone'], $message);
+        $save = $this->Operations->Create($table, $data);
         
-        $response['status'] = 'pending';
-        $response['message'] = $message;
-        $response['data'] = null;
+        // Calculate charges
+        $mycharge = ($buyrate[0]['kes'] - $boughtbuy);
+        $newcharge = (float)$mycharge * $amountUSD;
+        $chargePercent = 0;
+        $totalAmountKES = $amount + ($newcharge * $conversionRate);
+        
+        // Record in ledgers
+        $cr_dr = 'dr';
+        $customer_ledger_data = array(
+            'transaction_id' => $transaction_id,
+            'transaction_number' => $transaction_number,
+            'description' => 'Deposit to deriv',
+            'pay_method' => 'STEPAKASH',
+            'wallet_id' => $wallet_id,
+            'paid_amount' => $amount,
+            'cr_dr' => $cr_dr,
+            'deriv' => 1,
+            'trans_date' => $this->date,
+            'currency' => 'USD',
+            'amount' => $amountUSD,
+            'rate' => $conversionRate,
+            'chargePercent' => $chargePercent,
+            'charge' => $newcharge,
+            'total_amount' => $totalAmountKES,
+            'status' => 1,
+            'created_at' => $this->date,
+        );
+        
+        $save_customer_ledger = $this->Operations->Create('customer_ledger', $customer_ledger_data);
+        
+        $system_ledger_data = $customer_ledger_data;
+        $save_system_ledger = $this->Operations->Create('system_ledger', $system_ledger_data);
+        
+        if ($save && $save_customer_ledger && $save_system_ledger) {
+            // Get user phone for notification
+            $condition1 = array('wallet_id' => $wallet_id);
+            $searchUser = $this->Operations->SearchByCondition('customers', $condition1);
+            $phone = $searchUser[0]['phone'];
+            
+            $message = 'Txn ID: ' . $transaction_number . ', a deposit of ' . $amountUSD . ' USD has been successfully processed to your Deriv account ' . $crNumber;
+            
+            // Send notifications
+            $this->Operations->sendSMS($phone, $message);
+            $stevephone = '0703416091';
+            $this->Operations->sendSMS($stevephone, $message);
+            
+            $response['status'] = 'success';
+            $response['message'] = $message;
+            $response['data'] = null;
+        } else {
+            throw new Exception('Failed to record transaction');
+        }
+        
+    } catch (Exception $e) {
+        // If automatic transfer fails, create pending request for manual processing
+        $table = 'deriv_deposit_request';
+        $transaction_number = $this->transaction_number;
+        
+        $data = array(
+            'transaction_id' => $transaction_id,
+            'transaction_number' => $transaction_number,
+            'wallet_id' => $wallet_id,
+            'cr_number' => $crNumber,
+            'amount' => $amountUSD,
+            'rate' => $conversionRate,
+            'status' => 0, // Mark as pending
+            'deposited' => 0,
+            'bought_at' => $boughtbuy,
+            'request_date' => $this->date,
+        );
+        
+        $save = $this->Operations->Create($table, $data);
+        
+        if ($save) {
+            $response['status'] = 'pending';
+            $response['message'] = 'Deposit request received and pending manual processing';
+            $response['data'] = null;
+        } else {
+            $response['status'] = 'error';
+            $response['message'] = 'Failed to initiate deposit request: ' . $e->getMessage();
+            $response['data'] = null;
+        }
     }
-
+    
     echo json_encode($response);
 }
 
