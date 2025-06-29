@@ -76,14 +76,13 @@ $query_builder = TRUE;
 $db['default'] = array(
     'dsn'      => '',
     'hostname' => 'localhost',
-    'username' => 'root',
-    'password' => '',
-    'database' => 'taifatec_stepakash',
+    'username' => 'stepaka1_apelisol',
+    'password' => 'Savvytonny@apeli9',
+    'database' => 'stepaka1_taifatec_stepakash',
     'dbdriver' => 'mysqli',
     'dbprefix' => '',
     'pconnect' => FALSE,
-    'db_debug' => (ENVIRONMENT !== 'development'),
-    //'db_debug' => TRUE,
+    'db_debug' => (ENVIRONMENT !== 'production'),
     'cache_on' => FALSE,
     'cachedir' => '',
     'char_set' => 'utf8',
@@ -95,5 +94,3 @@ $db['default'] = array(
     'failover' => array(),
     'save_queries' => TRUE
 );
-
-

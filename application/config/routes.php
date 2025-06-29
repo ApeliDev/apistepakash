@@ -54,6 +54,12 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 $route['default_controller'] = 'welcome';
 $route['signup'] = 'Auth/CreateAccount';
 $route['login'] = 'Auth/Login';
+//$route['derivauth'] = 'auth/derivauth';
+// deriv
+$route['DerivOAuth'] = 'Auth/DerivOAuth';
+$route['DerivCallback'] = 'Auth/DerivCallback';
+$route['GetDerivSessionData'] = 'Auth/GetDerivSessionData';
+
 $route['sendotp'] = 'Auth/sendotp';
 $route['verifyotp'] = 'Auth/verifyOtp';
 $route['updatepassword'] = 'Auth/updatepassword';
@@ -65,6 +71,7 @@ $route['deposit_mpesa'] = 'Main/DepositFromMpesa';
 $route['mpesa_withdraw'] = 'Main/WithdrawToMpesa'; 
 $route['mpesa_deposit'] = 'Main/DepositToDeriv'; 
 $route['stkresults'] = 'Money/stkresults';
+$route['b2c_result'] = 'Money/b2c_result';
 $route['home_data'] = 'Main/home'; 
 $route['user_transactions'] = 'Main/transactions'; 
 $route['balance'] = 'Main/balance'; 
@@ -78,9 +85,6 @@ $route['next_receipt'] = 'Money/next_receipt';
 $route['query_receipt'] = 'Main/query_receipt';
 $route['pay_now'] = 'Main/pay_now';
 $route['send_gift'] = 'Main/send_gift';
-
-
-
 
 
 //ADMIN 
@@ -153,25 +157,7 @@ $route['reverse_transaction'] = 'Partner/reverse_transaction';
 $route['verify_transaction'] = 'Partner/verify_transaction';
 $route['transaction_report'] = 'Partner/transaction_report';
 
-
-
-
-
 $route['audit_report'] = 'Partner/audit_report';
 $route['logout'] = 'Partner/logout';
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 $route['404_override'] = '';
 $route['translate_uri_dashes'] = FALSE;

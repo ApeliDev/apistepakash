@@ -1,6 +1,6 @@
 <?php
 defined('BASEPATH') OR exit('No direct script access allowed');
-
+use WebSocket\Client;
 class Main extends CI_Controller {
     
     private $transaction_id;
@@ -20,56 +20,37 @@ class Main extends CI_Controller {
         
         parent::__construct();
         $this->load->model('Operations');
-        
-            $this->load->library('session');
-            
+        $this->load->library('session');
         $this->currentDateTime = new DateTime('now', new DateTimeZone('Africa/Nairobi'));
-        
-         $this->date  = $this->currentDateTime->format('Y-m-d H:i:s');
-         
-         $this->timeframe = 600;
-            
-      
-        
-            // Check if transaction_id and time_frame are already set in the session
-            $transaction_id = $this->session->userdata('transaction_id');
-            $time_frame = $this->session->userdata('time_frame');
-        
-            // Check if the stored time_frame is still valid (within the allowed time frame)
-            $valid_time_frame = $time_frame && (time() - $time_frame <= 30);
-        
-            // If transaction_id is not set or the time_frame is not valid, generate new values
-            if (!$transaction_id || !$valid_time_frame) {
-                 $transaction_id = $this->Operations->OTP(6);
-
-                 $transaction_number =  $this->GenerateNextTransaction();
-                 $this->transaction_number = $transaction_number;
-                 $time_frame = time();
-        
-                // Set transaction_id and time_frame in the session
-                $this->session->set_userdata('transaction_id', $transaction_id);
-                $this->session->set_userdata('time_frame', $time_frame);
-            
-
-            }
-            
-            
-        
-            // Set transaction_id in $this->transaction_id
-            $this->transaction_id = $transaction_id;
-
-            $partner_transaction_number =  $this->GeneratePartnerNextTransaction();
-
-            $this->partner_transaction_number = $partner_transaction_number;
-
-      
-
-       header('Content-Type: application/json');
-       // header("Access-Control-Allow-Origin: $origin");
-       header("Access-Control-Allow-Origin: * ");
-       header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-       header('Access-Control-Allow-Headers: Content-Type');
-       header('Access-Control-Max-Age: 86400');
+        $this->date  = $this->currentDateTime->format('Y-m-d H:i:s');
+        $this->timeframe = 600;
+        // Check if transaction_id and time_frame are already set in the session
+        $transaction_id = $this->session->userdata('transaction_id');
+        $time_frame = $this->session->userdata('time_frame');
+    
+        // Check if the stored time_frame is still valid (within the allowed time frame)
+        $valid_time_frame = $time_frame && (time() - $time_frame <= 30);
+    
+        // If transaction_id is not set or the time_frame is not valid, generate new values
+        if (!$transaction_id || !$valid_time_frame) {
+            $transaction_id = $this->Operations->OTP(6);
+            $transaction_number =  $this->GenerateNextTransaction();
+            $this->transaction_number = $transaction_number;
+            $time_frame = time();
+            // Set transaction_id and time_frame in the session
+            $this->session->set_userdata('transaction_id', $transaction_id);
+            $this->session->set_userdata('time_frame', $time_frame);
+        }
+        // Set transaction_id in $this->transaction_id
+        $this->transaction_id = $transaction_id;
+        $partner_transaction_number =  $this->GeneratePartnerNextTransaction();
+        $this->partner_transaction_number = $partner_transaction_number;
+        header('Content-Type: application/json');
+        // header("Access-Control-Allow-Origin: $origin");
+        header("Access-Control-Allow-Origin: * ");
+        header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+        header('Access-Control-Allow-Headers: Content-Type');
+        header('Access-Control-Max-Age: 86400');
     }
 
 	
@@ -80,26 +61,18 @@ class Main extends CI_Controller {
 	}
 	
 
-
-
     public function home()
     {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $session_table = 'login_session';
             $session_id = $this->input->post('session_id');
-    
             $session_condition = array('session_id' => $session_id);
             $checksession = $this->Operations->SearchByCondition($session_table, $session_condition);
-            
             $loggedtime = $checksession[0]['created_on'];
-            
             $currentTime = $this->date;
-            
-            
             $loggedTimestamp = strtotime($loggedtime);
             $currentTimestamp = strtotime($currentTime);
             $timediff = $currentTimestamp - $loggedTimestamp;
-        
             // Check if the time difference is more than 1 minute (60 seconds)
             if (($timediff) >  $this->timeframe) {
                 $response['status'] = 'fail';
@@ -109,10 +82,7 @@ class Main extends CI_Controller {
             
             else if (!empty($checksession) && $checksession[0]['session_id'] == $session_id) {
                 // User is logged in
-    
                 $wallet_id = $checksession[0]['wallet_id'];
-
-
                 $user_details = $this->UserAccount($wallet_id);
                 $user_credit =$user_details['total_credit'];
                 $user_debit =$user_details['total_debit'];
@@ -120,59 +90,42 @@ class Main extends CI_Controller {
                 $user_phone = $user_details['phone'];
                 $user_wallet = $user_details['wallet_id'];
                 $user_agent = $user_details['agent'];
-
-    
                 $summary = $this->Operations->customer_transection_summary($wallet_id);
                 $condition = array('wallet_id' => $wallet_id);
                 $table = 'customer_ledger';
                 $transactions = $this->Operations->SearchByConditionDeriv($table, $condition);
-
                 $trans_data = [];
                 foreach ($transactions as $key ) {
-
-
-                 $trans_detail = $this->mapTransactionDetails($key);
-         
-                 $user_trans['transaction_type'] = $trans_detail['transaction_type'];
-                 $user_trans['status_text'] = $trans_detail['status_text'];
-                 $user_trans['status_color'] = $trans_detail['status_color'];
-                 $user_trans['text_arrow'] = $trans_detail['text_arrow'];
-                 $user_trans['transaction_number'] = $key['transaction_number'];
-                 $user_trans['receipt_no'] = $key['receipt_no'];
-                 $user_trans['pay_method'] = $key['pay_method'];
-                 $user_trans['wallet_id'] = $key['wallet_id'];
-                 $user_trans['trans_id'] = $key['trans_id'];
-                 $user_trans['paid_amount'] = $key['paid_amount'];
-                 $user_trans['amount'] = $key['amount'];
-                 $user_trans['trans_date'] = $key['trans_date'];
-                 $user_trans['currency'] = $key['currency'];
-                 $user_trans['status'] = $key['status']; 
-                 $user_trans['created_at'] = $key['created_at'];
-
-                 $trans_data[] = $user_trans;
+                    $trans_detail = $this->mapTransactionDetails($key);
+                    $user_trans['transaction_type'] = $trans_detail['transaction_type'];
+                    $user_trans['status_text'] = $trans_detail['status_text'];
+                    $user_trans['status_color'] = $trans_detail['status_color'];
+                    $user_trans['text_arrow'] = $trans_detail['text_arrow'];
+                    $user_trans['transaction_number'] = $key['transaction_number'];
+                    $user_trans['receipt_no'] = $key['receipt_no'];
+                    $user_trans['pay_method'] = $key['pay_method'];
+                    $user_trans['wallet_id'] = $key['wallet_id'];
+                    $user_trans['trans_id'] = $key['trans_id'];
+                    $user_trans['paid_amount'] = $key['paid_amount'];
+                    $user_trans['amount'] = $key['amount'];
+                    $user_trans['trans_date'] = $key['trans_date'];
+                    $user_trans['currency'] = $key['currency'];
+                    $user_trans['status'] = $key['status']; 
+                    $user_trans['created_at'] = $key['created_at'];
+                    $trans_data[] = $user_trans;
                  
                 }
     
-    
                 //get our buy rate
                 $deriv_buy_condition = array('exchange_type' => 1,'service_type'=>1);
-                
                 $buyrate = $this->Operations->SearchByConditionBuy('exchange', $deriv_buy_condition);
-    
                 //get our sell rate
                 $deriv_sell_condition = array('exchange_type' => 2,'service_type'=>1);
-                
                 $sellrate = $this->Operations->SearchByConditionBuy('exchange', $deriv_sell_condition);
-
-                
-
                 $transactions = $trans_data;
                 $buyrate = $buyrate[0]['kes'];
                 $sellrate = $sellrate[0]['kes'];
-
-
                 $dollar_rates = $this->get_rates();
-    
                 $data = array(
                     'total_credit' => $user_credit,
                     'total_debit' => $user_debit,
@@ -301,282 +254,123 @@ class Main extends CI_Controller {
     {
         // Define an array to store rates for different services
         $rates = array();
-    
         // Deriv buy rate
         $deriv_buy_condition = array('exchange_type' => 1, 'service_type' => 1);
         $deriv_buy_rate = $this->Operations->SearchByConditionBuy('exchange', $deriv_buy_condition);
         $rates['deriv_buy'] = $deriv_buy_rate[0]['kes'];
         $rates['deriv_buy_charge'] = $deriv_buy_rate[0]['charge'];
         $rates['deriv_buy_fee'] = $deriv_buy_rate[0]['fee'];
-
-
-    
         // Deriv sell rate
         $deriv_sell_condition = array('exchange_type' => 2, 'service_type' => 1);
         $deriv_sell_rate = $this->Operations->SearchByConditionBuy('exchange', $deriv_sell_condition);
         $rates['deriv_sell'] = $deriv_sell_rate[0]['kes'];
         $rates['deriv_sell_charge'] = $deriv_sell_rate[0]['charge'];
         $rates['deriv_sell_fee'] = $deriv_sell_rate[0]['fee'];
-
-
-    
         // Binance buy rate
         $binance_buy_condition = array('exchange_type' => 1, 'service_type' => 11);
         $binance_buy_rate = $this->Operations->SearchByConditionBuy('exchange', $binance_buy_condition);
         $rates['binance_buy'] = $binance_buy_rate[0]['kes'];
         $rates['binance_buy_charge'] = $binance_buy_rate[0]['charge'];
         $rates['binance_buy_fee'] = $binance_buy_rate[0]['fee'];
-
-
-    
         // Binance sell rate
         $binance_sell_condition = array('exchange_type' => 2, 'service_type' =>11);
         $binance_sell_rate = $this->Operations->SearchByConditionBuy('exchange', $binance_sell_condition);
         $rates['binance_sell'] = $binance_sell_rate[0]['kes'];
         $rates['binance_sell_charge'] = $binance_sell_rate[0]['charge'];
         $rates['binance_sell_fee'] = $binance_sell_rate[0]['fee'];
-
-
-    
         // Bitcoin buy rate
         $bitcoin_buy_condition = array('exchange_type' => 1, 'service_type' => 3);
         $bitcoin_buy_rate = $this->Operations->SearchByConditionBuy('exchange', $bitcoin_buy_condition);
         $rates['bitcoin_buy'] = $bitcoin_buy_rate[0]['kes'];
         $rates['bitcoin_buy_charge'] = $bitcoin_buy_rate[0]['charge'];
         $rates['bitcoin_buy_fee'] = $bitcoin_buy_rate[0]['fee'];
-
-
-    
         // Bitcoin sell rate
         $bitcoin_sell_condition = array('exchange_type' => 2, 'service_type' => 3);
         $bitcoin_sell_rate = $this->Operations->SearchByConditionBuy('exchange', $bitcoin_sell_condition);
         $rates['bitcoin_sell'] = $bitcoin_sell_rate[0]['kes'];
         $rates['bitcoin_sell_charge'] = $bitcoin_sell_rate[0]['charge'];
         $rates['bitcoin_sell_fee'] = $bitcoin_sell_rate[0]['fee'];
-
-
-    
         // Ethereum buy rate
         $ethereum_buy_condition = array('exchange_type' => 1, 'service_type' => 4);
         $ethereum_buy_rate = $this->Operations->SearchByConditionBuy('exchange', $ethereum_buy_condition);
         $rates['ethereum_buy'] = $ethereum_buy_rate[0]['kes'];
         $rates['ethereum_buy_charge'] = $ethereum_buy_rate[0]['charge'];
         $rates['ethereum_buy_fee'] = $ethereum_buy_rate[0]['fee'];
-
-
-    
         // Ethereum sell rate
         $ethereum_sell_condition = array('exchange_type' => 2, 'service_type' => 4);
         $ethereum_sell_rate = $this->Operations->SearchByConditionBuy('exchange', $ethereum_sell_condition);
         $rates['ethereum_sell'] = $ethereum_sell_rate[0]['kes'];
         $rates['ethereum_sell_charge'] = $ethereum_sell_rate[0]['charge'];
         $rates['ethereum_sell_fee'] = $ethereum_sell_rate[0]['fee'];
-
-
-    
         // USDT(ERC 20) buy rate
         $usdt_erc20_buy_condition = array('exchange_type' => 1, 'service_type' => 5);
         $usdt_erc20_buy_rate = $this->Operations->SearchByConditionBuy('exchange', $usdt_erc20_buy_condition);
         $rates['usdt_erc20_buy'] = $usdt_erc20_buy_rate[0]['kes'];
         $rates['usdt_erc20_buy_charge'] = $usdt_erc20_buy_rate[0]['charge'];
         $rates['usdt_erc20_buy_fee'] = $usdt_erc20_buy_rate[0]['fee'];
-
-
-    
         // USDT(ERC 20) sell rate
         $usdt_erc20_sell_condition = array('exchange_type' => 2, 'service_type' => 5);
         $usdt_erc20_sell_rate = $this->Operations->SearchByConditionBuy('exchange', $usdt_erc20_sell_condition);
         $rates['usdt_erc20_sell'] = $usdt_erc20_sell_rate[0]['kes'];
         $rates['usdt_erc20_sell_charge'] = $usdt_erc20_sell_rate[0]['charge'];
         $rates['usdt_erc20_sell_fee'] = $usdt_erc20_sell_rate[0]['fee'];
-
-
-    
         // USDT(TRC 20) buy rate
         $usdt_trc20_buy_condition = array('exchange_type' => 1, 'service_type' => 6);
         $usdt_trc20_buy_rate = $this->Operations->SearchByConditionBuy('exchange', $usdt_trc20_buy_condition);
         $rates['usdt_trc20_buy'] = $usdt_trc20_buy_rate[0]['kes'];
         $rates['usdt_trc20_buy_charge'] = $usdt_trc20_buy_rate[0]['charge'];
         $rates['usdt_trc20_buy_fee'] = $usdt_trc20_buy_rate[0]['fee'];
-
-
-    
         // USDT(TRC 20) sell rate
         $usdt_trc20_sell_condition = array('exchange_type' => 2, 'service_type' => 6);
         $usdt_trc20_sell_rate = $this->Operations->SearchByConditionBuy('exchange', $usdt_trc20_sell_condition);
         $rates['usdt_trc20_sell'] = $usdt_trc20_sell_rate[0]['kes'];
         $rates['usdt_trc20_sell_charge'] = $usdt_trc20_sell_rate[0]['charge'];
         $rates['usdt_trc20_sell_fee'] = $usdt_trc20_sell_rate[0]['fee'];
-
-
-    
         // Skrill buy rate
         $skrill_buy_condition = array('exchange_type' => 1, 'service_type' => 7);
         $skrill_buy_rate = $this->Operations->SearchByConditionBuy('exchange', $skrill_buy_condition);
         $rates['skrill_buy'] = $skrill_buy_rate[0]['kes'];
         $rates['skrill_buy_charge'] = $skrill_buy_rate[0]['charge'];
         $rates['skrill_buy_fee'] = $skrill_buy_rate[0]['fee'];
-
-
-    
         // Skrill sell rate
         $skrill_sell_condition = array('exchange_type' => 2, 'service_type' => 7);
         $skrill_sell_rate = $this->Operations->SearchByConditionBuy('exchange', $skrill_sell_condition);
         $rates['skrill_sell'] = $skrill_sell_rate[0]['kes'];
         $rates['skrill_sell_charge'] = $skrill_sell_rate[0]['charge'];
         $rates['skrill_sell_fee'] = $skrill_sell_rate[0]['fee'];
-
-
-    
         // Neteller buy rate
         $neteller_buy_condition = array('exchange_type' => 1, 'service_type' => 8);
         $neteller_buy_rate = $this->Operations->SearchByConditionBuy('exchange', $neteller_buy_condition);
         $rates['neteller_buy'] = $neteller_buy_rate[0]['kes'];
         $rates['neteller_buy_charge'] = $neteller_buy_rate[0]['charge'];
         $rates['neteller_buy_fee'] = $neteller_buy_rate[0]['fee'];
-
-
-    
         // Neteller sell rate
         $neteller_sell_condition = array('exchange_type' => 2, 'service_type' => 8);
         $neteller_sell_rate = $this->Operations->SearchByConditionBuy('exchange', $neteller_sell_condition);
         $rates['neteller_sell'] = $neteller_sell_rate[0]['kes'];
         $rates['neteller_sell_charge'] = $neteller_sell_rate[0]['charge'];
         $rates['neteller_sell_fee'] = $neteller_sell_rate[0]['fee'];
-
-
-         // Test buy rate
-         $service_test_buy_condition = array('exchange_type' => 1, 'service_type' => 9);
-         $service_test_buy_rate = $this->Operations->SearchByConditionBuy('exchange', $service_test_buy_condition);
-         $rates['service_test_buy'] = $service_test_buy_rate[0]['kes'];
-         $rates['service_test_buy_charge'] = $service_test_buy_rate[0]['charge'];
-         $rates['service_test_buy_fee'] = $service_test_buy_rate[0]['fee'];
- 
- 
-     
-         // Test sell rate
-         $service_test_sell_condition = array('exchange_type' => 2, 'service_type' => 9);
-         $service_test_sell_rate = $this->Operations->SearchByConditionBuy('exchange', $service_test_sell_condition);
-         $rates['service_test_sell'] = $service_test_sell_rate[0]['kes'];
-         $rates['service_test_sell_charge'] = $service_test_sell_rate[0]['charge'];
-         $rates['service_test_sell_fee'] = $service_test_sell_rate[0]['fee'];
-
-
-    
         // Return the rates as JSON
         return $rates;
     }
-    
 
 
-	public function transactions()
-	{
-	    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $session_table = 'login_session';
-            $session_id = $this->input->post('session_id');
-    
-            $session_condition = array('session_id' => $session_id);
-            $checksession = $this->Operations->SearchByCondition($session_table, $session_condition);
-            
-            $loggedtime = $checksession[0]['created_on'];
-            
-            $currentTime = $this->date;
-            
-            
-            $loggedTimestamp = strtotime($loggedtime);
-            $currentTimestamp = strtotime($currentTime);
-            $timediff = $currentTimestamp - $loggedTimestamp;
-        
-            // Check if the time difference is more than 1 minute (60 seconds)
-            if (($timediff) >  $this->timeframe) {
-                $response['status'] = 'fail';
-                $response['message'] = 'User logged out';
-                $response['data'] = null;
-            }
-            
-            else if (!empty($checksession) && $checksession[0]['session_id'] == $session_id) {
-                // User is logged in
-    
-                $wallet_id = $checksession[0]['wallet_id'];
-                $condition = array('wallet_id' => $wallet_id);
-                $table = 'customer_ledger';
-                $transactions = $this->Operations->SearchByConditionDeriv($table, $condition);
+    public function transactions()
+    {
+        $this->load->model('FunctionsController')->transactions();
+       
+    }
 
-                $trans_data = [];
-                foreach ($transactions as $key ) {
-                 # code...
-           
-                 
-                 $trans_detail = $this->mapTransactionDetails($key);
-
-
-         
-                 $user_trans['transaction_type'] = $trans_detail['transaction_type'];
-                 $user_trans['status_text'] = $trans_detail['status_text'];
-                 $user_trans['text_color'] = $trans_detail['status_color'];
-                 $user_trans['text_arrow'] = $trans_detail['text_arrow'];
-                 $user_trans['transaction_number'] = $key['transaction_number'];
-                 $user_trans['receipt_no'] = $key['receipt_no'];
-                 $user_trans['pay_method'] = $key['pay_method'];
-                 $user_trans['wallet_id'] = $key['wallet_id'];
-                 $user_trans['trans_id'] = $key['trans_id'];
-                 $user_trans['paid_amount'] = $key['paid_amount'];
-                 $user_trans['trans_date'] = $key['trans_date'];
-                 $user_trans['currency'] = $key['currency'];
-                 $user_trans['status'] = $key['status'];
-                 $user_trans['created_at'] = $key['created_at'];
-
-                 $trans_data[] = $user_trans;
-                 
-                }
-    
-    
-                $data = array(
-                    // 'trans' => $trans_data,
-                    'transactions' => $trans_data,
-                );
-    
-                $response['status'] = 'success';
-                $response['message'] = 'User is logged in';
-                $response['data'] = $data;
-            } else {
-                // User not logged in
-                $response['status'] = 'fail';
-                $response['message'] = 'User not logged in';
-                $response['data'] = null;
-            }
-        } else {
-            // Not a POST request
-            $response['status'] = 'fail';
-            $response['message'] = 'Invalid request method';
-            $response['data'] = null;
-        }
-    
-        // Send JSON response
-        header('Content-Type: application/json');
-        echo json_encode($response);
-        
-	}
-
-
-	
-    public function passwordupdate()
+   public function passwordupdate()
     {
         $response = array();
-    
-        // Retrieve data from POST request
         $pass1 = $this->input->post('password');
         $pass2 = $this->input->post('confirmpassword');
         $session_id = $this->input->post('session_id');
-    
-        // Validation rules
         $this->form_validation->set_rules('password', 'password', 'required');
         $this->form_validation->set_rules('confirmpassword', 'confirmpassword', 'required');
         $this->form_validation->set_rules('session_id', 'session_id', 'required');
-    
-        // Check if the request method is POST
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            // Validate form data
             if ($this->form_validation->run() == FALSE) {
                 $response['status'] = 'fail';
                 $response['message'] = 'session_id, password, and confirmpassword are required';
@@ -585,17 +379,11 @@ class Main extends CI_Controller {
                 // Check session
                 $session_condition = array('session_id' => $session_id);
                 $checksession = $this->Operations->SearchByCondition('login_session', $session_condition);
-                
                 $loggedtime = $checksession[0]['created_on'];
-            
                 $currentTime = $this->date;
-                
-                
                 $loggedTimestamp = strtotime($loggedtime);
                 $currentTimestamp = strtotime($currentTime);
                 $timediff = $currentTimestamp - $loggedTimestamp;
-            
-                // Check if the time difference is more than 1 minute (60 seconds)
                 if (($timediff) >  $this->timeframe) {
                     $response['status'] = 'fail';
                     $response['message'] = 'User logged out';
@@ -603,24 +391,18 @@ class Main extends CI_Controller {
                 }
                 elseif (!empty($checksession) && $checksession[0]['session_id'] == $session_id) {
                     $wallet_id = $checksession[0]['wallet_id'];
-    
-                    // Check if passwords match
                     if ($pass1 != $pass2) {
                         $response['status'] = 'fail';
                         $response['message'] = 'Passwords must match';
                         $response['data'] = null;
                     } else {
-                        // Update password
                         $data = array('password' => $this->Operations->hash_password($pass2));
                         $condition = array('wallet_id' => $wallet_id);
-    
                         if ($this->Operations->UpdateData('customers', $condition, $data)) {
                             $action = 'Updated account details';
                             $this->Operations->RecordAction($action);
-    
                             $message = "Password updated. New Password: " . $pass2;
                             $sms = $this->Operations->sendSMS($checksession[0]['phone'], $message);
-    
                             $response['status'] = 'success';
                             $response['message'] = 'Password updated successfully';
                             $response['data'] = null;
@@ -642,22 +424,13 @@ class Main extends CI_Controller {
             $response['message'] = 'Only POST requests are allowed';
             $response['data'] = null;
         }
-    
-        // Send JSON response
         header('Content-Type: application/json');
         echo json_encode($response);
     }
-
-
-	
-	
-
     
     public function WithdrawFromDeriv()
     {
         $response = array();
-    
-        // Check if it's a POST request
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             http_response_code(400); // Bad Request
             $response['status'] = 'fail';
@@ -665,61 +438,35 @@ class Main extends CI_Controller {
             echo json_encode($response);
             exit();
         }
-    
-        // Retrieve data from POST request
         $session_id = $this->input->post('session_id');
         $crNumber = $this->input->post('crNumber');
         $amount = $this->input->post('amount');
-    
-        // Validate form data
         $this->form_validation->set_rules('session_id', 'session_id', 'required');
         $this->form_validation->set_rules('crNumber', 'crNumber', 'required');
         $this->form_validation->set_rules('amount', 'amount', 'required');
-    
         if ($this->form_validation->run() == FALSE) {
-            // Handle validation errors
             $response['status'] = 'fail';
             $response['message'] = 'session_id, CR number, and amount are required';
             $response['data'] = null;
         } else {
-            // Check session
             $session_condition = array('session_id' => $session_id);
             $checksession = $this->Operations->SearchByCondition('login_session', $session_condition);
-            
             $loggedtime = $checksession[0]['created_on'];
-            
             $currentTime = $this->date;
-            
-            
             $loggedTimestamp = strtotime($loggedtime);
             $currentTimestamp = strtotime($currentTime);
             $timediff = $currentTimestamp - $loggedTimestamp;
-        
-            
-    
             if (!empty($checksession) && $checksession[0]['session_id'] == $session_id) {
-                // Valid session, retrieve wallet_id
                 $wallet_id = $checksession[0]['wallet_id'];
-    
-                // Continue with the rest of your logic
-
-    
-                //get our sell rate
                 $sellratecondition = array('exchange_type' => 2,'service_type'=>1);
                 $sellrate = $this->Operations->SearchByConditionBuy('exchange', $sellratecondition);
-                
                 $boughtsell = $sellrate[0]['bought_at'];
-
                 $conversionRate = $sellrate[0]['kes'];
                 $table = 'deriv_withdraw_request';
-    
                 $condition1 = array('wallet_id' => $wallet_id);
                 $searchUser = $this->Operations->SearchByCondition('customers', $condition1);
                 $phone = $searchUser[0]['phone'];
                 $transaction_number = $this->transaction_number;
-
-             
-
                     $data = array(
                         'wallet_id' => $wallet_id,
                         'cr_number' => $crNumber,
@@ -730,61 +477,36 @@ class Main extends CI_Controller {
                         'bought_at'=>$boughtsell,
                         'request_date' => $this->date,
                     );
-        
                     $save = $this->Operations->Create($table, $data);
-        
                     $paymethod = 'STEPAKASH';
                     $description = 'Withdrawal from deriv';
                     $currency = 'USD';
                     $dateTime = $this->date;
-        
                     if ($save === TRUE) {
                         $message = 'Withdrawal of ' . $amount . ' USD is currently being processed.';
-                       // $message = $amount . ' USD withdrawal request received successfully';
                         $sms = $this->Operations->sendSMS($phone, $message);
-    
-                        $stevephone = '0757259996';
-                        $albertphone = '0727010129';
-                        $samphone =     '0793601418';
-
-                        $sendadminsms0 = $this->Operations->sendSMS($samphone,$message);
-                        $sendadminsms1 = $this->Operations->sendSMS($stevephone,$message);
-                        $sendadminsms2 = $this->Operations->sendSMS($albertphone,$message);
-        
+                        $apeliphone = '0703416091';
+                        $sendadminsms0 = $this->Operations->sendSMS($apeliphone,$message);
                         $response['status'] = 'success';
                         $response['message'] = $message;
-                        $response['data'] = $data; // Include data key
+                        $response['data'] = $data; 
                     } else {
                         $response['status'] = 'error';
                         $response['message'] = 'Unable to process your request now, try again';
                         $response['data'] = null;
-                    }
-        
-
-
-                
+                    }    
             } else {
-                // User not logged in
                 $response['status'] = 'fail';
                 $response['message'] = 'User not logged in';
-                 $response['data'] = null;
+                $response['data'] = null;
             }
         }
-    
         echo json_encode($response);
     }
     
-    
-
-
-	
-
-
    public function DepositFromMpesa()
    {
         $response = array();
-    
-        // Check if it's a POST request
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             http_response_code(400); // Bad Request
             $response['status'] = 'fail';
@@ -793,67 +515,43 @@ class Main extends CI_Controller {
             echo json_encode($response);
             exit();
         }
-    
-        // Retrieve data from POST request
         $mobile = $this->input->post('phone');
         $mobile = str_replace(' ', '', $mobile);
         $phone = preg_replace('/^(?:\+?254|0)?/', '254', $mobile);
         $amount = $this->input->post('amount');
         $session_id = $this->input->post('session_id');
-    
         $this->form_validation->set_rules('phone', 'phone', 'required');
         $this->form_validation->set_rules('amount', 'amount', 'required');
         $this->form_validation->set_rules('session_id', 'session_id', 'required');
-    
         if ($this->form_validation->run() == FALSE) {
-            // Handle validation errors
             $response['status'] = 'fail';
             $response['message'] = 'session_id, phone or amount required';
             $response['data'] = null;
         } else {
-            // Validation successful, now retrieve session ID
-          
-    
             $session_condition = array('session_id' => $session_id);
             $check_session = $this->Operations->SearchByCondition('login_session', $session_condition);
-            
             $loggedtime = $checksession[0]['created_on'];
-
             $wallet_id = $check_session[0]['wallet_id'];
-
             $wallet_condition = array('wallet_id' => $wallet_id);
             $searchUser = $this->Operations->SearchByCondition('customers', $wallet_condition);
             $phone = $searchUser[0]['phone'];
             $phone = preg_replace('/^(?:\+?254|0)?/', '254', $phone);
-            
             $currentTime = $this->date;
-            
-            
             $loggedTimestamp = strtotime($loggedtime);
             $currentTimestamp = strtotime($currentTime);
             $timediff = $currentTimestamp - $loggedTimestamp;
-        
-          
-    
             if (empty($check_session) || $check_session[0]['session_id'] !== $session_id) {
                 $response['status'] = 'fail';
                 $response['message'] = 'User not logged in';
                 $response['data'] = null;
             } else {
-                // User is logged in, retrieve wallet ID
-
-
-                $mpesa_consumer_key = "WGEE5jgXQowJ56mld9g3GKG15AtqUMPj";
-                $mpesa_consumer_secret = "0gtwpYJd57dFdh9b";
-                $mpesapass = "386ab37a45b861a7813ce7d412c4db1ce2c552dd8872505cfedfd64a94036a55"; // mpesa key
-                $shortcode = "4124755"; // shortcode to pay to e.g., paybill/store number/head office no.
-
-                $systemUrl = 'https://stk.stepakash.com/response.php';
-                // $systemUrl = 'https://stepakash.taifatech.co.ke/index.php/stkresults';
-
+                $mpesa_consumer_key = "TzHlW8uxmQASXZ8lzPG7tYmN3ogBM6P2KaGTVGSlABkGtwUC"; 
+                $mpesa_consumer_secret = "gzpVFF1kZzGgwQJO9ENHfxSwxgJabYpKRzDu997wi5HDskFuXfdKA0WMGb6OSXGn"; 
+                $mpesapass = "e801513141e1054208ee5206db5942c5a69faab9e4a663ab703448ce9d82d144"; 
+                $shortcode = "4165647"; 
+                $systemUrl = 'https://api.stepakash.com/index.php/stkresults';
                 $identifierType = "CustomerPayBillOnline";
-                $invoice_number = "STEPAKASH";
-    
+                $invoice_number = "STEPAKASH-".$wallet_id; 
                 $feedback = $this->check_transaction_api(
                     $mpesa_consumer_key,
                     $mpesa_consumer_secret,
@@ -865,50 +563,39 @@ class Main extends CI_Controller {
                     $identifierType,
                     $invoice_number
                 );
-    
-                // Handle the feedback as needed
-    
-                // Example: Assuming the check_transaction_api function returns success
                 $response['status'] = 'success';
                 $response['message'] = $feedback;
                 $response['data'] = null;
             }
         }
-    
         echo json_encode($response);
     }
 
 
 
     function check_transaction_api($mpesa_consumer_key,$mpesa_consumer_secret,
-            $mpesapass,$amount,$phone_no,$shortcode,$systemUrl,$identifierType,$invoice_number)
+        $mpesapass,$amount,$phone_no,$shortcode,$systemUrl,$identifierType,$invoice_number)
     {
         //set system time to Nairobi
-        //date_default_timezone_set("Africa/Nairobi");
+        date_default_timezone_set("Africa/Nairobi");
         $timestamp = date("Ymdhis");
-        //set pass
         $password = base64_encode($shortcode.$mpesapass.$timestamp);
-        
         $curl = curl_init();
         $url = 'https://api.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials';
         curl_setopt($curl, CURLOPT_URL, $url);
         $credentials = base64_encode($mpesa_consumer_key.':'.$mpesa_consumer_secret);
-        curl_setopt($curl, CURLOPT_HTTPHEADER, array('Authorization: Basic '.$credentials)); //setting a custom header
-        curl_setopt($curl, CURLOPT_HEADER, false); //set false to allow json decode
+        curl_setopt($curl, CURLOPT_HTTPHEADER, array('Authorization: Basic '.$credentials)); 
+        curl_setopt($curl, CURLOPT_HEADER, false); 
         curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($curl, CURLOPT_RETURNTRANSFER, true); //very important
+        curl_setopt($curl, CURLOPT_RETURNTRANSFER, true); 
         $curl_response = curl_exec($curl);
         $cred_password_raw = json_decode($curl_response, true); 
         $cred_password = $cred_password_raw['access_token']; 
-        
-        
         $url = 'https://api.safaricom.co.ke/mpesa/stkpush/v1/processrequest';
         $curl = curl_init();
         curl_setopt($curl, CURLOPT_URL, $url);
-        curl_setopt($curl, CURLOPT_HTTPHEADER, array('Content-Type:application/json','Authorization:Bearer '.$cred_password)); //setting custom header
-        
+        curl_setopt($curl, CURLOPT_HTTPHEADER, array('Content-Type:application/json','Authorization:Bearer '.$cred_password)); 
         $curl_post_data = array(
-          //Fill in the request parameters with valid values
           'BusinessShortCode' => $shortcode,
           'Password' => $password,
           'Timestamp' => $timestamp,
@@ -921,40 +608,19 @@ class Main extends CI_Controller {
           'AccountReference' => $invoice_number,
           'TransactionDesc' => 'not applicable',
         );
-
-    
-        
         $data_string = json_encode($curl_post_data);
-        
         curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($curl, CURLOPT_POST, true);
         curl_setopt($curl, CURLOPT_POSTFIELDS, $data_string);
-        
         $curl_response = curl_exec($curl);
-        //echo json_decode($curl_response); /*avoid json_decoding twice */
         $resultStatus_raw = json_decode($curl_response, true); ;
         $resultStatus = $resultStatus_raw['ResponseCode'];
         $MerchantRequestID = $resultStatus_raw['MerchantRequestID'];
-        $CheckoutRequestID = $resultStatus_raw['CheckoutRequestID'];
-
-
-        
+        $CheckoutRequestID = $resultStatus_raw['CheckoutRequestID'];                                                           
         if ($resultStatus === "0"){
-            // $success_on = "yes#";
-            // $success_combination = $success_on.$MerchantRequestID."#".$CheckoutRequestID;
-            // //return $success_combination;
-            // foreach($resultStatus_raw as $key=>$value){
-            //     $parte .= $key."=>".$value."\n";
-            // }
-            // return $parte;
-            
             $moby = preg_replace('/^(?:\+?254|0)?/','+254', $phone_no);
-
             $saving = $this->save_order($moby,$amount,$MerchantRequestID,$CheckoutRequestID);
-            return $saving;
-
-
-            
+            return $saving;   
         }
         else{
             $error_on = "error#";
@@ -967,15 +633,10 @@ class Main extends CI_Controller {
 
     public function save_order($phone_no,$amount,$MerchantRequestID,$CheckoutRequestID)
     {
-        
         $condition4 = array('phone'=>$phone_no);
-        
         $searchUser = $this->Operations->SearchByCondition('customers',$condition4);
-
         $wallet_id = $searchUser[0]['wallet_id'];
- 
-        $data = array
-        (
+        $data = array(
             'wallet_id'=>$wallet_id,
             'phone'=>$phone_no,
             'amount'=>$amount,
@@ -983,27 +644,15 @@ class Main extends CI_Controller {
             'CheckoutRequestID'=>$CheckoutRequestID,
             'paid'=>0, 
         );
-            
-    
         $save = $this->Operations->Create('mpesa_deposit',$data);
-        
         $message = '';
-        
-        if($save === TRUE)
-        {
-            $message = 'Refresh your page to update the transaction';
-
-
-           
+        if($save === TRUE){
+            $message = 'Please complete the deposit of KES ' . $amount . ' on your phone to update your balance.'; 
         }
-        else
-        {
-             $message = 'Something went wrong,contact support';
+        else{
+            $message = 'Something went wrong,contact support';
         }
-         return $message;
-
-
-
+        return $message;
     }
 
 	
@@ -1011,13 +660,11 @@ class Main extends CI_Controller {
     public function WithdrawToMpesa()
     {
         $response = array();
-        
         $summary = 0;
         $total_credit = 0;
         $total_debit = 0;
         $total_balance_kes = 0;
         $amount = 0;
-    
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             http_response_code(400); // Bad Request
             $response['status'] = 'fail';
@@ -1026,174 +673,170 @@ class Main extends CI_Controller {
             echo json_encode($response);
             exit();
         }
-    
-        // Fetch session_id
         $session_id = $this->input->post('session_id');
         $table = 'customers';
         $mobile = $this->input->post('phone'); 
         $mobile = str_replace(' ', '', $mobile);
         $phone = preg_replace('/^(?:\+?254|0)?/', '254', $mobile);
         $amount = $this->input->post('amount');
-
-        // Use the session_id to retrieve wallet_id from the database
         $session_table = 'login_session';
         $session_condition = array('session_id' => $session_id);
         $checksession = $this->Operations->SearchByCondition($session_table, $session_condition);
 
         $wallet_id = $checksession[0]['wallet_id'];
-        // $crNumber = $checksession[0]['crnumber'];
+        $crNumber = $checksession[0]['crnumber'];
         $crNumber = '';
 
-        
-        
-        
         $summary = $this->Operations->customer_transection_summary($wallet_id);
 
         // Remove commas and convert to float
         $total_credit = (float) str_replace(',', '', $summary[0][0]['total_credit']);
         $total_debit = (float) str_replace(',', '', $summary[1][0]['total_debit']);
-    
-        // Calculate the balance in KES
         $total_balance_kes = $total_credit - $total_debit;
-        
         $loggedtime = $checksession[0]['created_on'];
-            
         $currentTime = $this->date;
-        
-        
         $loggedTimestamp = strtotime($loggedtime);
         $currentTimestamp = strtotime($currentTime);
         $timediff = $currentTimestamp - $loggedTimestamp;
-    
-
-    
         if (!empty($checksession) && $checksession[0]['session_id'] == $session_id) {
-            // Continue with withdrawal processing
-    
-            // Form validation
             $this->form_validation->set_rules('phone', 'phone', 'required');
             $this->form_validation->set_rules('amount', 'amount', 'required');
             $this->form_validation->set_rules('session_id', 'session_id', 'required');
-    
             if ($this->form_validation->run() == FALSE) {
                 // Handle validation errors
                 $response['status'] = 'fail';
                 $response['message'] = 'session_id,phone or amount required';
-                $response['data'] = null; // Assign 'data' key as null
+                $response['data'] = null; 
             } else {
-                
-    
                 if (empty($phone)) {
                     $response['status'] = 'fail';
                     $response['message'] = 'Phone required';
-                    $response['data'] = null; // Assign 'data' key as null
+                    $response['data'] = null; 
                 } elseif (empty($amount)) {
                     $response['status'] = 'fail';
                     $response['message'] = 'Amount required';
-                    $response['data'] = null; // Assign 'data' key as null
+                    $response['data'] = null; 
                 } 
-                 elseif ($amount < 10) {
+                elseif ($amount < 10) {
                     $response['status'] = 'error';
                     $response['message'] = 'The amount must be greater than KES 10.';
                     $response['data'] = null;
-
                 }
                 elseif (($total_balance_kes < $amount) && ($amount > $total_balance_kes)) {
                     $response['status'] = 'error';
                     $response['message'] = 'Insufficient funds in your wallet';
                     $response['data'] = null;
-
                 }
                 elseif(($total_balance_kes >= $amount) && ($amount <= $total_balance_kes))
                 {
-                    $table = 'mpesa_withdrawals';
-                    $date = $this->date;
-                    $condition1 = array('wallet_id'=>$wallet_id);
-                    $searchUser = $this->Operations->SearchByCondition('customers',$condition1);
-                    
-                    $phone = $searchUser[0]['phone'];
-                    $phone = str_replace(' ', '', $phone);
-                    $phone = preg_replace('/^(?:\+?254|0)?/','254', $phone);
-                    
-                    $transaction_id = $this->Operations->Generator(9); 
-                    
-                    
-                    $initiate = $this->b2c($transaction_id,$wallet_id,$crNumber,$phone,$amount);
-                    
-                    
-                    //$initiate = '';
-                    $response = $initiate;
+                    $duplicate_check = $this->checkDuplicateWithdrawal($wallet_id, $phone, $amount);
+                    if ($duplicate_check['is_duplicate']) {
+                        $searchUser = $this->Operations->SearchByCondition('customers', array('wallet_id'=>$wallet_id));
+                        $customer_name = isset($searchUser[0]['name']) ? $searchUser[0]['name'] : 'Customer';
+                        $duplicate_message = "Hi $customer_name, duplicate withdrawal attempt of KES " . number_format($amount, 2) . " blocked for security. Contact support if this wasn't you. Time: " . date('d/m/Y H:i');
+                        $this->Operations->sendSMS($phone, $duplicate_message);
+                        $response['status'] = 'error';
+                        $response['message'] = 'Duplicate transaction detected. Please wait ' . $duplicate_check['wait_time'] . ' seconds before making another withdrawal of the same amount.';
+                        $response['data'] = null;
+                        file_put_contents("mpesab2c/duplicate_attempt_" . date('Y-m-d_H-i-s') . ".txt", 
+                            "Duplicate withdrawal blocked:\n" .
+                            "Wallet ID: $wallet_id\n" .
+                            "Phone: $phone\n" .
+                            "Amount: KES $amount\n" .
+                            "Last transaction: " . $duplicate_check['last_transaction_time'] . "\n" .
+                            "Wait time: " . $duplicate_check['wait_time'] . " seconds");
+                    } else {
+                        $table = 'mpesa_withdrawals';
+                        $date = $this->date;
+                        $condition1 = array('wallet_id'=>$wallet_id);
+                        $searchUser = $this->Operations->SearchByCondition('customers',$condition1);
+                        $phone = $searchUser[0]['phone'];
+                        $phone = str_replace(' ', '', $phone);
+                        $phone = preg_replace('/^(?:\+?254|0)?/','254', $phone);
+                        $transaction_id = $this->Operations->Generator(9); 
+                        $initiate = $this->b2c($transaction_id,$wallet_id,$crNumber,$phone,$amount);
+                        $response = $initiate;
+                    }
                 }
                 else {
-                 
                     $response['status'] = 'error';
                     $response['message'] = 'Unable to withdraw amount'.$amount.' now,try later';
                     $response['data'] = null; // Assign 'data' key as null
-                                    
                 }
             }
         } else {
-            // User not logged in
             $response['status'] = 'fail';
             $response['message'] = 'User not logged in';
-            $response['data'] = null; // Assign 'data' key as null
+            $response['data'] = null; 
         }
-    
+
         echo json_encode($response);
     }
-    
-   
 
-    
-
-	public function b2c($transaction_id,$wallet_id,$crNumber,$phone_no,$Amount)
-	{
-	    
-        //chnage this parameters
-        $url = 'https://api.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials';
-        $mpesa_consumer_key = 'PGlrTUnTDcDIfPJRBGVv3LFLWUQPMmiI'; //put the live key from Daraja portal
-        $mpesa_consumer_secret = 'S1C8ykQq3UQIGi3q'; //put the live cunsumer secret from Daraja Portal
-        $InitiatorName = 'WEBSTEPAK'; //put the user created at the mpesa org portal. The user must be of API type
-        $password = 'Stepakash@2024'; //put the password of the above user
-        // $ResultURL = base_url().'index.php/b2c_result'; //put the result URL
-        // $QueueTimeOutURL = base_url().'index.php/b2c_result'; //put the QueueTimeOutURL URL
-        $ResultURL = 'https://stk.stepakash.com/b2c.php';
-        $QueueTimeOutURL = 'https://stk.stepakash.com/b2c.php';
-        //$Amount = 10; //input amount you want to send
-        $PartyA = '4125347'; //input the pay bill bulk payments
-        //$PartyB = '254793601418'; //input the phone number that will receive money eg. 254712345678
-        $PartyB = $phone_no;
+    /**
+     * Check for duplicate withdrawal transactions within a specified time frame
+    */
+    private function checkDuplicateWithdrawal($wallet_id, $phone, $amount)
+    {
+        $time_threshold = 30; // 30 seconds
+        $current_time = time();
+        $threshold_time = date('Y-m-d H:i:s', $current_time - $time_threshold);
         
+        // Check for recent transactions with same wallet, phone, and amount
+        $recent_transactions = $this->db->where('wallet_id', $wallet_id)
+                                    ->where('phone', $phone)
+                                    ->where('amount', $amount)
+                                    ->where('request_date >=', $threshold_time)
+                                    ->order_by('request_date', 'DESC')
+                                    ->get('mpesa_withdrawals')
+                                    ->result_array();
+        if (!empty($recent_transactions)) {
+            $last_transaction_time = strtotime($recent_transactions[0]['request_date']);
+            $time_diff = $current_time - $last_transaction_time;
+            $wait_time = $time_threshold - $time_diff;
             
+            return array(
+                'is_duplicate' => true,
+                'wait_time' => $wait_time,
+                'last_transaction_time' => $recent_transactions[0]['request_date']
+            );
+        }
+        return array('is_duplicate' => false);
+    }
+
+    public function b2c($transaction_id,$wallet_id,$crNumber,$phone_no,$Amount)
+    {
+        $url = 'https://api.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials';
+        $mpesa_consumer_key = 'TzHlW8uxmQASXZ8lzPG7tYmN3ogBM6P2KaGTVGSlABkGtwUC'; 
+        $mpesa_consumer_secret = 'gzpVFF1kZzGgwQJO9ENHfxSwxgJabYpKRzDu997wi5HDskFuXfdKA0WMGb6OSXGn';
+        $InitiatorName = 'STEVEWEB'; 
+        $password = '..ken6847musyimI.'; 
+        $ResultURL = 'https://api.stepakash.com/index.php/b2c_result';
+        $QueueTimeOutURL = 'https://api.stepakash.com/index.php/b2c_result';
+        $PartyA = '4165647'; 
+        $PartyB = $phone_no;
         $curl = curl_init();
         curl_setopt($curl, CURLOPT_URL, $url);
         $credentials = base64_encode($mpesa_consumer_key.':'.$mpesa_consumer_secret);
-        curl_setopt($curl, CURLOPT_HTTPHEADER, array('Authorization: Basic '.$credentials)); //setting a custom header
-        curl_setopt($curl, CURLOPT_HEADER, false); //set false to allow json decode
+        curl_setopt($curl, CURLOPT_HTTPHEADER, array('Authorization: Basic '.$credentials)); 
+        curl_setopt($curl, CURLOPT_HEADER, false); 
         curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($curl, CURLOPT_RETURNTRANSFER, true); //very important
+        curl_setopt($curl, CURLOPT_RETURNTRANSFER, true); 
         $curl_response = curl_exec($curl);
         $cred_password_raw = json_decode($curl_response, true); 
         $cred_password = $cred_password_raw['access_token']; 
-        //setting security credentials
         $publicKey_path = 'cert.cer';
         $fp=fopen($publicKey_path,"r");
         $publicKey=fread($fp,8192);
         fclose($fp);
         $plaintext = $password; 
-        
         openssl_public_encrypt($plaintext, $encrypted, $publicKey, OPENSSL_PKCS1_PADDING);
-        
         $security_credential = base64_encode($encrypted); 
-        
-        
         $url = 'https://api.safaricom.co.ke/mpesa/b2c/v1/paymentrequest';
         $curl = curl_init();
         curl_setopt($curl, CURLOPT_URL, $url);
         curl_setopt($curl, CURLOPT_HTTPHEADER, array('Content-Type:application/json','Authorization:Bearer '.$cred_password)); //setting custom header
-        
         $curl_post_data = array(
-            //Fill in the request parameters with valid values
             'InitiatorName' => $InitiatorName,
             'SecurityCredential' => $security_credential,
             'CommandID' => 'SalaryPayment',
@@ -1202,42 +845,26 @@ class Main extends CI_Controller {
             'PartyB' => $PartyB,
             'ResultURL' => $ResultURL,
             'QueueTimeOutURL' => $QueueTimeOutURL,
-            'Remarks' => 'none applicable',
-            'Occasion' => 'none applicable'
+            'Remarks' => 'Stepakash Wallet Withdrawal',
+            'Occasion' => 'Wallet Withdrawal'
         );
-        
         $data_string = json_encode($curl_post_data);
-        
         curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($curl, CURLOPT_POST, true);
         curl_setopt($curl, CURLOPT_POSTFIELDS, $data_string);
-        
         $curl_response = curl_exec($curl);
-    
         $responseArray = json_decode($curl_response, true);
         $conversationID = $responseArray['ConversationID'];
         $originatorConversationID = $responseArray['OriginatorConversationID'];
         $responseCode = $responseArray['ResponseCode'];
-        
-
         $results = $this->WithdrawMoneyRequest($transaction_id,$wallet_id,$crNumber,$Amount,$phone_no,$conversationID,$originatorConversationID,$responseCode);
         return $results;  
-        
+    }
 
-
-    
-	}
-	
-	
-	
-	public function WithdrawMoneyRequest($transaction_id,$wallet_id,$crNumber,$amount,$phone,$conversationID,$originatorConversationID,$ResponseCode) 
+    public function WithdrawMoneyRequest($transaction_id,$wallet_id,$crNumber,$amount,$phone,$conversationID,$originatorConversationID,$ResponseCode) 
     {
-
         $transaction_number = $this->transaction_number;
-  
-    
         $table = 'mpesa_withdrawals';
-
         $data = array(
             'transaction_id' => $transaction_id,
             'transaction_number' => $transaction_number,
@@ -1252,14 +879,11 @@ class Main extends CI_Controller {
             'paid' => 0,
             'request_date' => $this->date,
         );
-
         $save = $this->Operations->Create($table, $data);
-
-
         $cr_dr = 'cr';
         $dr_cr = 'dr';
         $paymethod = 'STEPAKASH';
-        $description = 'ITP';
+        $description = 'Withdrawal to M-Pesa';
         $receipt_no = $this->Operations->Generator(15); 
         $trans_id = $this->Operations->Generator(8);
         $trans_date = $this->date;
@@ -1273,65 +897,58 @@ class Main extends CI_Controller {
         $chargeAmt = 0;
         $TotalamountToDebit = $amountToDebit;
         $transaction_number = $this->transaction_number;
-
-
         $deduct = $this->DebitToAccount($transaction_id,$transaction_number,$receipt_no,$description,$paymethod,$senderWalletID,$trans_date,$currency,$amountToDebit,$conversionRate,$chargePercent,$chargeAmt,$TotalamountToDebit);
-
-        // print_r($save);
+        $condition1 = array('wallet_id' => $wallet_id);
+        $searchuser1 = $this->Operations->SearchByCondition('customers', $condition1);
+        $customer_name = isset($searchuser1[0]['name']) ? $searchuser1[0]['name'] : 'Customer';
         
         if($save === TRUE && $deduct === TRUE)
         {
+            $request_message = "Hi $customer_name, your withdrawal request of KES " . number_format($amount, 2) . " is being processed. You will receive confirmation once completed. Ref: $transaction_id";
+            $this->Operations->sendSMS($phone, $request_message);
             $response['status'] = 'success';
-            $response['message'] = 'Successfull KES '.$amount.' withdraw processesing refresh to update';
-
-            $response['data'] = $data; // Assign 'data' key as null
+            $response['message'] = 'Withdrawal request of KES '.$amount.' initiated successfully. You will receive SMS confirmation once processed.';
+            $response['data'] = $data;
+            file_put_contents("mpesab2c/request_" . date('Y-m-d_H-i-s') . ".txt", 
+                "Withdrawal request initiated:\n" .
+                "Transaction ID: $transaction_id\n" .
+                "Wallet ID: $wallet_id\n" .
+                "Amount: KES $amount\n" .
+                "Phone: $phone\n" .
+                "Customer: $customer_name");
         }else
         {
+            $error_message = "Hi $customer_name, your withdrawal request of KES " . number_format($amount, 2) . " failed. Please contact support at 0726628688. Ref: $transaction_id";
+            $this->Operations->sendSMS($phone, $error_message);
             $response['status'] = 'error';
-            $response['message'] = 'Unable to transact KES '.$amount.' call admin 0726628688';
-
-            $response['data'] = null; // Assign 'data' key as null
+            $response['message'] = 'Unable to process withdrawal of KES '.$amount.'. Please contact admin 0726628688';
+            $response['data'] = null;
         }
-        
         return $response;
-
-
     }
 	
+
 	public function account()
-	{ 
-	    //$url = APP_INST.'deriv';
-	   // $apiResponse = $this->Operations->CurlFetch($url);
-	   
-	  
-        
-        $appId = 51570; // Replace with your app_id or leave as 51570 for testing.
+    { 
+        $apiResponse = $this->Operations->CurlFetch($url);
+        $appId = 76420; 
         $endpoint = 'ws.binaryws.com';
         $url = "wss://{$endpoint}/websockets/v3?app_id={$appId}";
-        
         $client = new Client($url, [], ['timeout' => 10]);
-        
-        $token = 'j3diL96vFp9aFJQ';
-        
+        $token = 'DidPRclTKE0WYtT';
         // Send a message
         $client->send(json_encode(["authorize" => $token]));
-        
         // Receive messages
         echo "Connected to WebSocket server\n";
-        
         $message = $client->receive();
         $decode = json_decode($message,true);
         echo $decode['authorize']['balance'];
+    }
 
 
-	   
-	}
-	
-	
 	public function DepositToDeriv() 
     {
         $response = array();
-    
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
             http_response_code(400); // Bad Request
             $response['status'] = 'fail';
@@ -1339,7 +956,6 @@ class Main extends CI_Controller {
             echo json_encode($response);
             exit();
         }
-    
         // Fetch inputs using CodeIgniter's input class
         $crNumber = $this->input->post('crNumber');
         $crNumber = str_replace(' ', '', $crNumber);
@@ -1364,7 +980,6 @@ class Main extends CI_Controller {
         }
     
         // Validate session_id (assuming it's coming from somewhere)
-    
         $session_table = 'login_session';
         $session_condition = array('session_id' => $session_id);
         $checksession = $this->Operations->SearchByCondition($session_table, $session_condition);
@@ -1391,17 +1006,10 @@ class Main extends CI_Controller {
 
         else
         {
-            
-             
-           
             $summary = $this->Operations->customer_transection_summary($wallet_id);
-        
             //get our buy rate 
             $buyratecondition = array('exchange_type'=>1,'service_type'=>1);
             $buyrate = $this->Operations->SearchByConditionBuy('exchange',$buyratecondition);
-        
-
-        
             // Remove commas and convert to float
             $total_credit = (float) str_replace(',', '', $summary[0][0]['total_credit']);
             $total_debit = (float) str_replace(',', '', $summary[1][0]['total_debit']);
@@ -1411,29 +1019,24 @@ class Main extends CI_Controller {
         
             // Convert the balance to USD using the conversion rate
             $conversionRate = $buyrate[0]['kes'];
-            
             $boughtbuy = $buyrate[0]['bought_at'];
-            
-            
             $total_balance_usd = $total_balance_kes / $conversionRate;
-        
             // Now you have the balance in USD
             $total_balance_usd_formatted = number_format($total_balance_usd, 2);
-            
             $amountUSD = round($amount / $conversionRate,2);
         
             $chargePercent = 0;
             $chargeAmount = $amountUSD * $chargePercent;
     
-            // Deduct the charge from the input amount
+            // Deduct the charge from the input amount 
             $amountUSDAfterCharge = $amountUSD - $chargeAmount;
     
             $amountKESAfterCharge = ((float)$chargeAmount * (float)$conversionRate);
     
-            // Check if the amount is greater than $10
-            if ($amountUSD < 10) {
+            // Check if the amount is greater than $1
+            if ($amountUSD < 1) {
                 $response['status'] = 'error';
-                $response['message'] = 'The amount must be greater than $10.';
+                $response['message'] = 'The amount must be greater than $1.';
                 $response['data'] = null;
 
             } elseif ($total_balance_usd_formatted < $amountUSD) {
@@ -1452,7 +1055,7 @@ class Main extends CI_Controller {
 
                 $transaction_number = $this->transaction_number;
                
-    
+
                 $data = array(
                     'transaction_id'=>$transaction_id,
                     'transaction_number'=>$transaction_number,
@@ -1522,14 +1125,10 @@ class Main extends CI_Controller {
                     
                     $message = 'Txn ID: ' . $this->transaction_number . ', a deposit of ' . $amountUSD . ' USD is currently being processed.';
                     
-                    $stevephone = '0757259996';
-                    $albertphone = '0727010129';
-                    $samphone =     '0793601418';
-
+                    $stevephone = '0703416091';
+                    
                     $sendadminsms0 = $this->Operations->sendSMS($samphone,$message);
-                    $sendadminsms1 = $this->Operations->sendSMS($stevephone,$message);
-                    $sendadminsms2 = $this->Operations->sendSMS($albertphone,$message);
-
+                    
                     //SEND USER APP NOTIFICATION 
                     $sms = $this->Operations->sendSMS($phone, $message);
                   
@@ -1548,8 +1147,6 @@ class Main extends CI_Controller {
             
         }
     
-
-    
         echo json_encode($response);
     
     }
@@ -1557,54 +1154,35 @@ class Main extends CI_Controller {
 	
 	public function initiate()
 	{
-	    $url = APP_INST.'home.php';
+	    $url = APP_INSTANCE.'home.php';
 	    $body = array('req_id'=>$this->transaction_id);
 	    $apiResponse = $this->Operations->CurlPost($url,$body);
 	    //print_r($apiResponse);
 	    echo $apiResponse;
-	   
 	    
 	}
 	
 
-
-
-	
 	public function balance()
 	{
         header("Access-Control-Allow-Origin: *");
-        header("Access-Control-Allow-Origin: https://stepak.taifatech.co.ke");
+        header("Access-Control-Allow-Origin: https://api.stepakash.com");
         header("Access-Control-Allow-Methods: POST");
         header("Access-Control-Allow-Headers: Content-Type");
-        
-        
-	     $json_data = file_get_contents('php://input');
-         $data = json_decode($json_data, true);
-
-         
-          // Encode the PHP array to a JSON string
+	    $json_data = file_get_contents('php://input');
+        $data = json_decode($json_data, true); 
+       // Encode the PHP array to a JSON string
         $json_string = json_encode($data, JSON_PRETTY_PRINT);
-        
         $req_id = '';
-         
         if( $data['balance']['req_id'])
         {
             $req_id = $data['balance']['req_id'];
         }
-        
-       
-
-         
-         $file_path = 'derivtransactions/derivdepositing'.$this->date.'.json';
-
-        
+        $file_path = 'derivtransactions/derivdepositing'.$this->date.'.json';
         // Write the JSON string to the file
         file_put_contents($file_path, $json_string);
-        
-         $process = $this->process_request($req_id);
-         echo json_encode($process);
-
-
+        $process = $this->process_request($req_id);
+        echo json_encode($process);
 	}
 	
 	public function balanceTest()
@@ -1612,32 +1190,22 @@ class Main extends CI_Controller {
 	    header("Access-Control-Allow-Origin: *");
         header("Access-Control-Allow-Methods: POST");
         header("Access-Control-Allow-Headers: Content-Type");
-        
 	    $json_data = file_get_contents('php://input');
         $data = json_decode($json_data, true);
-
-          // Encode the PHP array to a JSON string
+        // Encode the PHP array to a JSON string
         $json_string = json_encode($data, JSON_PRETTY_PRINT);
-        
-        //$file_path = 'derivtransactions/derivdepositing'.$this->date.'.json';
-
-        
+        $file_path = 'derivtransactions/derivdepositing'.$this->date.'.json';
         // Write the JSON string to the file
        // file_put_contents($file_path, $json_string);
-        
         $req_id = '';
         $check = 0;
-         
         if(($data['balance']['req_id']) || ($data['balance']['transaction_id']) && ($data['balance']['paymentagent_transfer'] == 1))
         {
             $req_id = $data['balance']['req_id'];
             $process = $this->process_request($req_id);
             $check = 1;
         }
-
-        
         $responseData = array('message' => 'Success! '.$check.'');
-        
         echo json_encode($responseData);
 	}
 	
@@ -1673,67 +1241,46 @@ class Main extends CI_Controller {
         $totalwithdrawals = number_format($totalwithdrawals, 2, '.', ',');
         $active_users = $this->Operations->ActiveUsers();
         $total_gifting = $this->Operations->total_gifting();
-
-
         $stepakash_total_transfers = $this->Operations->StepakashTotalTransfers();
-        
-    
-        
         $deposits = $this->Operations->getSumOfAmount();
         $deposits = (float)sprintf("%.2f", $deposits);
-        
         $earnings = $this->Operations->GetEarnings();
         $earnings = (float)sprintf("%.2f", $earnings);
-        
         $condition = array('status' => 0);
         $deriv_deposit_request = $this->Operations->CountWithCondition('deriv_deposit_request', $condition);
         $deriv_withdraw_request = $this->Operations->CountWithCondition('deriv_withdraw_request', $condition);
         $requests = ((int) $deriv_deposit_request + (int) $deriv_withdraw_request);
-
         $crypto_table = 'crypto_requests';
         $binance_condition1 = array('status' => 0,'crypto_type'=>11,'cr_dr'=>'dr');
         $binance_deposit_request = $this->Operations->CountWithCondition($crypto_table, $binance_condition1);
         $binance_condition2 = array('status' => 0,'crypto_type'=>11,'cr_dr'=>'cr');
         $binance_withdraw_request = $this->Operations->CountWithCondition($crypto_table, $binance_condition2);
- 
-
         $bitcoin_condition1 = array('status' => 0,'crypto_type'=>3,'cr_dr'=>'dr');
         $bitcoin_deposit_request = $this->Operations->CountWithCondition($crypto_table, $bitcoin_condition1);
         $bitcoin_condition2 = array('status' => 0,'crypto_type'=>3,'cr_dr'=>'cr');
         $bitcoin_withdraw_request = $this->Operations->CountWithCondition($crypto_table, $bitcoin_condition2);
-
-
         $ethereum_condition1 = array('status' => 0,'crypto_type'=>4,'cr_dr'=>'dr');
         $ethereum_deposit_request = $this->Operations->CountWithCondition($crypto_table, $ethereum_condition1);
         $ethereum_condition2 = array('status' => 0,'crypto_type'=>4,'cr_dr'=>'cr');
         $ethereum_withdraw_request = $this->Operations->CountWithCondition($crypto_table, $ethereum_condition2);
-
-
         $tether_condition1 = array('status' => 0,'crypto_type'=>5,'cr_dr'=>'dr');
         $tether_deposit_request = $this->Operations->CountWithCondition($crypto_table, $tether_condition1);
         $tether_condition2 = array('status' => 0,'crypto_type'=>5,'cr_dr'=>'cr');
         $tether_withdraw_request = $this->Operations->CountWithCondition($crypto_table, $tether_condition2);
-
         $tether2_condition1 = array('status' => 0,'crypto_type'=>6,'cr_dr'=>'dr');
         $tether2_deposit_request = $this->Operations->CountWithCondition($crypto_table, $tether2_condition1);
         $tether2_condition2 = array('status' => 0,'crypto_type'=>6,'cr_dr'=>'cr');
         $tether2_withdraw_request = $this->Operations->CountWithCondition($crypto_table, $tether2_condition2);
-
         $total_withdraw_req = (int)($tether_withdraw_request) + (int)$tether2_withdraw_request;
-
         $total_depo_req = (int)($tether_deposit_request) + (int)$tether2_deposit_request;
-
-
         $skrill_condition = array('status' => 0,'crypto_type'=>7,'cr_dr'=>'dr');
         $skrill_deposit_request = $this->Operations->CountWithCondition($crypto_table, $skrill_condition);
         $skrill_condition2 = array('status' => 0,'crypto_type'=>7,'cr_dr'=>'cr');
         $skrill_withdraw_request = $this->Operations->CountWithCondition($crypto_table, $skrill_condition2);
-
         $neteller_condition = array('status' => 0,'crypto_type'=>8,'cr_dr'=>'dr');
         $neteller_deposit_request = $this->Operations->CountWithCondition($crypto_table, $neteller_condition);
         $neteller_condition2 = array('status' => 0,'crypto_type'=>8,'cr_dr'=>'cr');
         $neteller_withdraw_request = $this->Operations->CountWithCondition($crypto_table, $neteller_condition2);
-    
         $data = array(
             'total_gifting' =>$total_gifting,
             'appusers' => $appusers,
@@ -1762,15 +1309,11 @@ class Main extends CI_Controller {
             'dailyDeposits'=> json_encode($dailyDeposits),
             'dailyWithdrawals'=> json_encode($dailyWithdrawals),
             'totalwithdrawals'=>$totalwithdrawals,
-            'totaldeposits'=>$totaldeposits,
-            
+            'totaldeposits'=>$totaldeposits,  
         );
-        
-    
         $response['status'] = 'success';
         $response['message'] = 'Admin home data';
         $response['data'] = $data;
-    
         // Send JSON response
         echo json_encode($response);
     }
@@ -1780,59 +1323,33 @@ class Main extends CI_Controller {
     public function process_request($request_id)
 	{
 	    
-	     if (empty($request_id)) {
-                $response['status'] = 'fail';
-                $response['message'] = 'Request ID is empty.';
-                $response['data'] = null;
-                exit();
-            }
+	    if (empty($request_id)) {
+         $response['status'] = 'fail';
+         $response['message'] = 'Request ID is empty.';
+         $response['data'] = null;
+         exit();
+        }
 
 	    $table = 'deriv_deposit_request';
-	    
 	    $condition = array('transaction_id'=>$request_id);
-	    
 	    $search = $this->Operations->SearchByCondition($table,$condition);
-	    
 	    $amount = $search[0]['amount'];
-	    
 	    $cr_number = $search[0]['cr_number'];
-	    
 	    $wallet_id= $search[0]['wallet_id'];
-
 	    $transaction_number= $search[0]['transaction_number'];
-
-	    
 	    $data = array('status'=>1,'deposited'=>$amount);
-	    
 	    $update = $this->Operations->UpdateData($table,$condition,$data);
-	    
 	    $condition1 = array('wallet_id'=>$wallet_id);
-	    
 	    $searchuser = $this->Operations->SearchByCondition('customers',$condition1);
-	    
 	    $mobile = $searchuser[0]['phone'];
-	    
 	    $phone = preg_replace('/^(?:\+?254|0)?/','254', $mobile);
-	    
 	    if($update === TRUE)
 	    {
-	        
-	         $message = ''.$transaction_number.' processed, '.$amount.'USD has been successfully deposited to your deriv account '.$cr_number.'';
-                   
+	        $message = ''.$transaction_number.' processed, '.$amount.'USD has been successfully deposited to your deriv account '.$cr_number.'';     
             //SEND USER APP NOTIFICATION 
-             $sms = $this->Operations->sendSMS($phone, $message);
-             
-
-             $stevephone = '0757259996';
-             $albertphone = '0727010129';
-             $samphone =     '0793601418';
-
-             $sendadminsms0 = $this->Operations->sendSMS($samphone,$message);
-             $sendadminsms1 = $this->Operations->sendSMS($stevephone,$message);
-             $sendadminsms2 = $this->Operations->sendSMS($albertphone,$message);
-            
-
-
+            $sms = $this->Operations->sendSMS($phone, $message);
+            $stevephone = '0703416091';
+            $sendadminsms0 = $this->Operations->sendSMS($stevephone,$message);
             //$this->session->set_flashdata('msg',$message);
             //redirect('home');
             $response['status'] = 'success';
@@ -1842,10 +1359,7 @@ class Main extends CI_Controller {
 	    }
 	    else
 	    {
-	 
-	        
 	        $messo = 'Unable to process request now try again';
-	        
 	        $response['status'] = 'error';
             $response['message'] = $messo;
             $response['data'] = null;
@@ -1865,54 +1379,32 @@ class Main extends CI_Controller {
         }
         else
         {
-              $request_id = $this->input->post('request_id');
-	    
-	     if (empty($request_id)) {
-	         
+            $request_id = $this->input->post('request_id');
+	        if (empty($request_id)) {
             $response['status'] = 'error';
             $response['message'] = 'Request ID is empty.';
             $response['data'] = null;
-    
         }
         else
         {
             $table = 'deriv_deposit_request';
-	    
     	    $condition = array('transaction_id'=>$request_id);
-    	    
     	    $search = $this->Operations->SearchByCondition($table,$condition);
-    	    
     	    $amount = $search[0]['amount'];
-    	    
     	    $cr_number = $search[0]['cr_number'];
-    	    
     	    $wallet_id= $search[0]['wallet_id'];
-
 	        $transaction_number= $search[0]['transaction_number'];
-
-    	    
     	    $data = array('status'=>1,'deposited'=>$amount);
-    	    
     	    $update = $this->Operations->UpdateData($table,$condition,$data);
-    	    
     	    $condition1 = array('wallet_id'=>$wallet_id);
-    	    
     	    $searchuser = $this->Operations->SearchByCondition('customers',$condition1);
-    	    
     	    $mobile = $searchuser[0]['phone'];
-    	    
     	    $phone = preg_replace('/^(?:\+?254|0)?/','254', $mobile);
-    	    
     	    if($update === TRUE)
-    	    {
-    	        
-    	         $message = ''.$transaction_number.' processed, '.$amount.'USD has been successfully deposited to your deriv account '.$cr_number.'';
-                       
+    	    { 
+    	        $message = ''.$transaction_number.' processed, '.$amount.'USD has been successfully deposited to your deriv account '.$cr_number.'';      
                 //SEND USER APP NOTIFICATION 
-                 $sms = $this->Operations->sendSMS($phone, $message);
-
-                
-
+                $sms = $this->Operations->sendSMS($phone, $message);
                 //$this->session->set_flashdata('msg',$message);
                 //redirect('home');
                 $response['status'] = 'success';
@@ -1922,33 +1414,20 @@ class Main extends CI_Controller {
     	    }
     	    else
     	    {
-    	 
-    	        
     	        $messo = 'Something went wrong';
-    	        
     	        $response['status'] = 'error';
                 $response['message'] = $messo;
                 $response['data'] = null;
     	    }
         } 
         }
-	    
-	 
 	    echo json_encode($response);
 	}
-    
-    
 
-    
     public function depositsrequest()
     {
-        $response = array();
-    
- 
-    
-        $search = $this->Operations->SearchJoin();
-
-    
+        $response = array();    
+        $search = $this->Operations->SearchJoin();  
         if (!empty($search)) {
             $response['status'] = 'success';
             $response['message'] = 'Deposits data retrieved successfully';
@@ -1957,8 +1436,7 @@ class Main extends CI_Controller {
             $response['status'] = 'error';
             $response['message'] = 'No deposit data found';
             $response['data'] = null;
-        }
-    
+        }    
         // Send JSON response
         echo json_encode($response);
     }
@@ -1997,13 +1475,10 @@ class Main extends CI_Controller {
         else
         {
             $request_id = $this->input->post('request_id');
-            
             $checkcondition = array('status' => 1,'id' => $request_id);
             $confirmcondition = $this->Operations->SearchByCondition('deriv_withdraw_request', $checkcondition);
-            
             $checkcondition2 = array('status' => 0,'id' => $request_id);
             $confirmcondition2 = $this->Operations->SearchByCondition('deriv_withdraw_request', $checkcondition2);
-                
             $response = array();
             if (!$request_id || empty($request_id)) {
                 $response['status'] = 'fail';
@@ -2019,116 +1494,104 @@ class Main extends CI_Controller {
             else if($confirmcondition2)
             {
                 //check if already processed
-               
-         
-                    //get our sell rate
-                    $sellratecondition = array('exchange_type' => 2,'service_type'=>1);
-                    $sellrate = $this->Operations->SearchByConditionBuy('exchange', $sellratecondition);
-                    
-                    $boughtsell = $sellrate[0]['bought_at'];
-                    
+                //get our sell rate
+                $sellratecondition = array('exchange_type' => 2,'service_type'=>1);
+                $sellrate = $this->Operations->SearchByConditionBuy('exchange', $sellratecondition);
+                $boughtsell = $sellrate[0]['bought_at'];
+                $table = 'deriv_withdraw_request';
+                $condition = array('id' => $request_id);
+                $search = $this->Operations->SearchByCondition($table, $condition);
+                $amount = $search[0]['amount'];
+                $cr_number = $search[0]['cr_number'];
+                $wallet_id = $search[0]['wallet_id'];
+                $data = array('status' => 1, 'withdraw' => $amount);
+                $update = $this->Operations->UpdateData($table, $condition, $data);
+                $condition1 = array('wallet_id' => $wallet_id);
+                $searchuser = $this->Operations->SearchByCondition('customers', $condition1);
+                $mobile = $searchuser[0]['phone'];
+                $phone = preg_replace('/^(?:\+?254|0)?/', '254', $mobile);
+            
+                $paymethod = 'STEPAKASH';
+                $description = 'Withdraw from deriv';
+                $currency = 'USD';
+                $dateTime = $this->date;
+                $cr_dr = 'cr';
+                $conversionRate = $sellrate[0]['kes'];
+                $chargePercent = 0;
+                $chargeAmount = (float)($amount * $chargePercent);
+                $amountKESAfterCharge = ((float) $amount * (float) $conversionRate);
+                $finalCharge = ((float) $chargeAmount * (float) $conversionRate);
+                $totalAmt = ((float) $finalCharge + (float) $amountKESAfterCharge);
                 
-                    
-                    $table = 'deriv_withdraw_request';
-                    $condition = array('id' => $request_id);
-                    $search = $this->Operations->SearchByCondition($table, $condition);
-                
-                    $amount = $search[0]['amount'];
-                    $cr_number = $search[0]['cr_number'];
-                    $wallet_id = $search[0]['wallet_id'];
+                $mycharge = ($boughtsell - $sellrate[0]['kes']);
+                $newcharge = (float)$mycharge * $amount;
 
+        
+                $transaction_number =  $this->transaction_number;
+                $transaction_id = $this->Operations->OTP(9);
                 
-                    $data = array('status' => 1, 'withdraw' => $amount);
-                    $update = $this->Operations->UpdateData($table, $condition, $data);
-                
-                    $condition1 = array('wallet_id' => $wallet_id);
-                    $searchuser = $this->Operations->SearchByCondition('customers', $condition1);
-                    $mobile = $searchuser[0]['phone'];
-                    $phone = preg_replace('/^(?:\+?254|0)?/', '254', $mobile);
-                
-                    $paymethod = 'STEPAKASH';
-                    $description = 'Withdraw from deriv';
-                    $currency = 'USD';
-                    $dateTime = $this->date;
-                    $cr_dr = 'cr';
-                    $conversionRate = $sellrate[0]['kes'];
-                    $chargePercent = 0;
-                    $chargeAmount = (float)($amount * $chargePercent);
-                    $amountKESAfterCharge = ((float) $amount * (float) $conversionRate);
-                    $finalCharge = ((float) $chargeAmount * (float) $conversionRate);
-                    $totalAmt = ((float) $finalCharge + (float) $amountKESAfterCharge);
+            
+                $customer_ledger_data = array(
+                    'transaction_id' => $transaction_id,
+                    'transaction_number'=>$transaction_number,
+                    'receipt_no' => $this->Operations->Generator(15),
+                    'description' => 'ITP',
+                    'pay_method' => $paymethod,
+                    'wallet_id' => $wallet_id,
+                    'paid_amount' => $amountKESAfterCharge,
+                    'cr_dr' => $cr_dr,
+                    'currency' => $currency,
+                    'amount' => $amount,
+                    'deriv' => 1,
+                    'rate' => $conversionRate,
+                    'chargePercent' => $chargePercent,
+                    'charge' => $newcharge,
+                    'total_amount' => $totalAmt,
+                    'status' => 1,
+                    'created_at' => $this->date,
+                );
+            
+                $save_customer_ledger = $this->Operations->Create('customer_ledger', $customer_ledger_data);
+            
+                $system_ledger_data = array(
+                    'transaction_id' => $transaction_id,
+                    'transaction_number' => $transaction_number,
+                    'receipt_no' => $this->Operations->Generator(15),
+                    'description' => 'ITP',
+                    'pay_method' => $paymethod,
+                    'wallet_id' => $wallet_id,
+                    'paid_amount' => $amountKESAfterCharge,
+                    'cr_dr' => $cr_dr,
+                    'currency' => $currency,
+                    'amount' => $amount,
+                    'deriv' => 1,
+                    'rate' => $conversionRate,
+                    'chargePercent' => $chargePercent,
+                    'charge' => $newcharge,
+                    'total_amount' => $totalAmt,
+                    'status' => 1,
+                    'created_at' => $this->date,
+                );
+            
+                $save_system_ledger = $this->Operations->Create('system_ledger', $system_ledger_data);
+            
+                if ($update === TRUE && $save_system_ledger === TRUE && $save_customer_ledger === TRUE) {
+                    $message = ''.$transaction_number.', ' . $amount .'USD has been successfully withdraw from your deriv account ' . $cr_number . '';
+            
+                    //SEND USER APP NOTIFICATION 
+                    $sms = $this->Operations->sendSMS($phone, $message);
+    
+            
+                    $response['status'] = 'success';
+                    $response['message'] = $message;
+                    $response['data'] = null;
                     
-                    $mycharge = ($boughtsell - $sellrate[0]['kes']);
-                    $newcharge = (float)$mycharge * $amount;
-
-           
-                    $transaction_number =  $this->transaction_number;
-                    $transaction_id = $this->Operations->OTP(9);
+                } else {
+                    $response['status'] = 'error';
+                    $response['message'] = 'Unable to process request now, try again';
+                    $response['data'] = null;
                     
-                
-                    $customer_ledger_data = array(
-                        'transaction_id' => $transaction_id,
-                        'transaction_number'=>$transaction_number,
-                        'receipt_no' => $this->Operations->Generator(15),
-                        'description' => 'ITP',
-                        'pay_method' => $paymethod,
-                        'wallet_id' => $wallet_id,
-                        'paid_amount' => $amountKESAfterCharge,
-                        'cr_dr' => $cr_dr,
-                        'currency' => $currency,
-                        'amount' => $amount,
-                        'deriv' => 1,
-                        'rate' => $conversionRate,
-                        'chargePercent' => $chargePercent,
-                        'charge' => $newcharge,
-                        'total_amount' => $totalAmt,
-                        'status' => 1,
-                        'created_at' => $this->date,
-                    );
-                
-                    $save_customer_ledger = $this->Operations->Create('customer_ledger', $customer_ledger_data);
-                
-                    $system_ledger_data = array(
-                        'transaction_id' => $transaction_id,
-                        'transaction_number' => $transaction_number,
-                        'receipt_no' => $this->Operations->Generator(15),
-                        'description' => 'ITP',
-                        'pay_method' => $paymethod,
-                        'wallet_id' => $wallet_id,
-                        'paid_amount' => $amountKESAfterCharge,
-                        'cr_dr' => $cr_dr,
-                        'currency' => $currency,
-                        'amount' => $amount,
-                        'deriv' => 1,
-                        'rate' => $conversionRate,
-                        'chargePercent' => $chargePercent,
-                        'charge' => $newcharge,
-                        'total_amount' => $totalAmt,
-                        'status' => 1,
-                        'created_at' => $this->date,
-                    );
-                
-                    $save_system_ledger = $this->Operations->Create('system_ledger', $system_ledger_data);
-                
-                    if ($update === TRUE && $save_system_ledger === TRUE && $save_customer_ledger === TRUE) {
-                        $message = ''.$transaction_number.', ' . $amount .'USD has been successfully withdraw from your deriv account ' . $cr_number . '';
-                
-                        //SEND USER APP NOTIFICATION 
-                        $sms = $this->Operations->sendSMS($phone, $message);
-     
-                
-                        $response['status'] = 'success';
-                        $response['message'] = $message;
-                        $response['data'] = null;
-                        
-                    } else {
-                        $response['status'] = 'error';
-                        $response['message'] = 'Unable to process request now, try again';
-                        $response['data'] = null;
-                        
-                    }
-                 
-                
+                }
             }
             else
             {
@@ -2137,49 +1600,34 @@ class Main extends CI_Controller {
                 $response['data'] = null;
             }
         }
-        
-    
-        
-         echo json_encode($response);
+        echo json_encode($response);
     }
     
     public function adminappusers()
     {
         $response = array();
-    
         $segments = $this->uri->rsegment_array();
         // Get the last segment
         $lastSegment = end($segments);
-    
         $data['title'] = $lastSegment;
         $search = $this->Operations->SearchCustomers();
-        
         $appusers = [];
-        
         foreach($search as $user)
         {
             $getuser = array();
-            
             $wallet_id = $user['wallet_id'];
-    
             $summary = $this->Operations->customer_transection_summary($wallet_id);
-            
             $total_credit = isset($summary[0][0]['total_credit']) ? $summary[0][0]['total_credit'] : 0;
            // $total_credit = (float)number_format($total_credit, 2);
            $total_credit = (float)sprintf("%.2f", $total_credit);
-            
             $total_debit = isset($summary[1][0]['total_debit']) ? $summary[1][0]['total_debit'] : 0;
             //$total_debit = (float)number_format($total_debit, 2);
             $total_debit = (float)sprintf("%.2f", $total_debit);
-            
             //$total_balance = -$summary[1][0]['total_debit'] + $summary[0][0]['total_credit'];
-            
            // $total_balance = (float)sprintf("%.2f", $total_balance);
             //$total_balance = (float)number_format($total_balance, 2);
-            
             $total_balance = -$summary[1][0]['total_debit'] + $summary[0][0]['total_credit'];
             $total_balance = (float)number_format($total_balance, 2, '.', '');
-            
             $getuser['id'] = $user['id'];
             $getuser['wallet_id'] = $user['wallet_id'];
             $getuser['phone'] = $user['phone'];
@@ -2188,14 +1636,9 @@ class Main extends CI_Controller {
             $getuser['total_debit'] = $total_debit;
             $getuser['total_balance'] = $total_balance;
             $getuser['created_on'] = $user['created_on'];
-            
             $appusers[] = $getuser;
-            
         }
         
-        
-   
-    
         if (!empty($search)) {
             $response['status'] = 'success';
             $response['message'] = 'App users retrieved successfully';
@@ -2821,9 +2264,6 @@ class Main extends CI_Controller {
 
                 $next_transaction_number = $this->getNextReceipt($transaction_number);
 
-                
-                    
-            
                 $cr_dr = 'cr';
                 $dr_cr = 'dr';
                 $paymethod = 'STEPAKASH';
@@ -5930,9 +5370,7 @@ public function getTransactionData($cr_dr, $deriv)
         else{
             return FALSE;
         }
-
     }
-
 
     public function GeneratePartnerNextTransaction()
     {
@@ -5942,10 +5380,4 @@ public function getTransactionData($cr_dr, $deriv)
         $nextReceipt = $this->getNextReceipt($last_id);
         return $nextReceipt;
     }
-    
-
- 
-
-     
-
 }

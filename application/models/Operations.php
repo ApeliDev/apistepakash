@@ -1,9 +1,9 @@
 <?php
 
+use WebSocket\Client;
+
 /**
-
  * 
-
  */
 
 class Operations extends CI_model
@@ -1265,51 +1265,27 @@ class Operations extends CI_model
 
 
 	public function verify_password_hash($password, $hash) {
-
-		
-
 		return password_verify($password, $hash);
-
-		
-
 	}
-
-
 
 	public function SendEmail($email,$subject,$message)
 
 	{
 
 		$protocol = 'smtp';
-
         $smtp_host = 'ssl://mail.ruphids.co.ke';
-
         $smtp_port = '465';
-
         $smtp_user = 'contact@ruphids.co.ke';
-
         $smtp_pass = 'Sam200010';
-
         $mailtype = 'Html';
-
-
-
 		$config = array(
-
 			'protocol' => $protocol,
-
 			'smtp_host' => $smtp_host,
-
 			'smtp_port' => $smtp_port,
-
 			'smtp_user' => $smtp_user,
-
 			'smtp_pass' => $smtp_pass,
-
 			'mailtype' => $mailtype,
-
 			'charset' => 'utf-8',
-
 			'newline'   => "\r\n"
 
 		);
@@ -1360,81 +1336,38 @@ class Operations extends CI_model
 
 	
 
-	 //Send sms  
-
+	//Send sms  
     public function sendSMS($mobile,$message)
-
-    {  
-
-        
+    { 
 
         $currentDateTime = new DateTime('now', new DateTimeZone('Africa/Nairobi'));
-
-        
-
-         $date  = $currentDateTime->format('Y-m-d H:i:s');
-
-         
-
+        $date  = $currentDateTime->format('Y-m-d H:i:s');
         $phone = preg_replace('/^(?:\+?254|0)?/','254', $mobile);
-
-        
-
-        $userid = 'samsonmunene';
-
-        $password = '7b5KRyhr';
-
-        //$mobile = '254793601418';
-
-       // $msg = 'testing';
-
+        $userid = 'stevengewa';
+        $password = 'Mindset123.';
         $senderid = 'STEPAK';
 
-        
 
         $curl = curl_init();
-
         curl_setopt_array($curl, array(
-
           CURLOPT_URL => "https://smsportal.hostpinnacle.co.ke/SMSApi/send",
-
           CURLOPT_RETURNTRANSFER => true,
-
           CURLOPT_ENCODING => "",
-
           CURLOPT_MAXREDIRS => 10,
-
           CURLOPT_TIMEOUT => 30,
-
           CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-
           CURLOPT_CUSTOMREQUEST => "POST",
-
           CURLOPT_POSTFIELDS => "userid=".$userid."&password=".$password."&mobile=".$phone."&msg=".$message."&senderid=".$senderid."&msgType=text&duplicatecheck=true&output=json&sendMethod=quick",
-
           CURLOPT_HTTPHEADER => array(
-
-            "apikey: somerandomuniquekey",
-
+            "apikey: 74bab2db35bcedd343974d01b4f48b3cbf9631d3",
             "cache-control: no-cache",
-
             "content-type: application/x-www-form-urlencoded"
-
           ),
 
         ));
-
-        
-
         $response = curl_exec($curl);
-
         $err = curl_error($curl);
-
-        
-
         curl_close($curl);
-
-        
 
         if ($err) {
 
@@ -1455,12 +1388,6 @@ class Operations extends CI_model
     	   $this->db->insert('outbox', $data);
 
         }
-
-
-
-
-
-       
 
     }
 
@@ -1655,23 +1582,22 @@ class Operations extends CI_model
 
 
 
-  public function Password_Generator($length)
-
+    public function Password_Generator($length)
    {
 
-   $string = "";
+    $string = "";
 
-   $chars = "abcdefghijklmanopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    $chars = "abcdefghijklmanopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
-   $size = strlen($chars);
+    $size = strlen($chars);
 
-   for ($i = 0; $i < $length; $i++) {
+    for ($i = 0; $i < $length; $i++) {
 
-       $string .= $chars[rand(0, $size - 1)];
+        $string .= $chars[rand(0, $size - 1)];
 
-   }
+    }
 
-   return $string; 
+    return $string; 
 
    }
 
@@ -2081,8 +2007,6 @@ class Operations extends CI_model
 
        return $response;
 
-      
-
    }
 
 
@@ -2189,10 +2113,7 @@ class Operations extends CI_model
 
 
    public function SaveSystemAudit($partner_id,$user_id,$ip_address,$mac_address,$action,$audit_time)
-  {
-
-
-
+    {
 	  $data = array(
 
 		 'partner_id' =>$partner_id,
@@ -2206,7 +2127,7 @@ class Operations extends CI_model
 
 	  $this->db->insert('system_audit', $data);
 
-  }
+    }
 
 
   //PARTNER MODULE STARTS HERE 
@@ -2337,13 +2258,88 @@ public function Search_gift()
     return $result;
 }
 
-
-  
-
-  
-    
-
-
-
 }
 
+class DerivAPI_Model extends CI_Model {
+    private $app_id = 76420; 
+    private $endpoint = 'wss://ws.binaryws.com/websockets/v3';
+    
+    public function __construct() {
+        parent::__construct();
+    }
+    
+    /**
+     * Connect to Deriv API
+     */
+    private function connectToDeriv($token) {
+        $url = $this->endpoint . "?app_id=" . $this->app_id;
+        $client = new WebSocket\Client($url, [], ['timeout' => 10]);
+        
+        // Authorize with token
+        $client->send(json_encode(["authorize" => $token]));
+        $response = json_decode($client->receive(), true);
+        
+        if (isset($response['error'])) {
+            throw new Exception("Deriv API Error: " . $response['error']['message']);
+        }
+        
+        return $client;
+    }
+    
+    /**
+     * Get account balance
+     */
+    public function getDerivBalance($token) {
+        try {
+            $client = $this->connectToDeriv($token);
+            
+            // Get balance
+            $client->send(json_encode(["get_account_status" => 1]));
+            $response = json_decode($client->receive(), true);
+            
+            $client->close();
+            
+            if (isset($response['get_account_status']['balance'])) {
+                return $response['get_account_status']['balance'];
+            }
+            return 0;
+        } catch (Exception $e) {
+            log_message('error', 'Deriv balance check failed: ' . $e->getMessage());
+            return false;
+        }
+    }
+    
+
+    
+    /**
+     * Transfer funds between accounts
+     */
+    public function transferFunds($token, $amount, $to_account, $description = '') {
+        try {
+            $client = $this->connectToDeriv($token);
+            
+            $transfer_data = [
+                "paymentagent_transfer" => 1,
+                "amount" => $amount,
+                "transfer_between_accounts" => 1,
+                "to_account" => $to_account,
+                "currency" => "USD",
+                "description" => $description
+            ];
+            
+            $client->send(json_encode($transfer_data));
+            $response = json_decode($client->receive(), true);
+            
+            $client->close();
+            
+            if (isset($response['error'])) {
+                throw new Exception($response['error']['message']);
+            }
+            
+            return $response['paymentagent_transfer'];
+        } catch (Exception $e) {
+            log_message('error', 'Deriv transfer failed: ' . $e->getMessage());
+            return false;
+        }
+    }
+}
