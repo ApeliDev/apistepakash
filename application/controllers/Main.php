@@ -947,209 +947,233 @@ class Main extends CI_Controller {
 
 
 	public function DepositToDeriv() 
-    {
-        $response = array();
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            http_response_code(400); // Bad Request
-            $response['status'] = 'fail';
-            $response['message'] = 'Only POST request allowed';
-            echo json_encode($response);
-            exit();
-        }
-        // Fetch inputs using CodeIgniter's input class
-        $crNumber = $this->input->post('crNumber');
-        $crNumber = str_replace(' ', '', $crNumber);
-
-        $amount = $this->input->post('amount');
-        $session_id = $this->input->post('session_id');
-        $transaction_id = $this->input->post('transaction_id');
-        
-        // Form validation
-        $this->form_validation->set_rules('crNumber', 'crNumber', 'required');
-        $this->form_validation->set_rules('amount', 'amount', 'required|numeric|greater_than[0]');
-        $this->form_validation->set_rules('session_id', 'session_id', 'required');
-        $this->form_validation->set_rules('transaction_id', 'transaction_id', 'required');
-        
-        if ($this->form_validation->run() == FALSE) {
-            // Handle validation errors
-            $response['status'] = 'fail';
-            $response['message'] = 'crNumber, amount,transaction_id and session_id required';
-            $response['data'] = null;
-            echo json_encode($response);
-            exit();
-        }
-    
-        // Validate session_id (assuming it's coming from somewhere)
-        $session_table = 'login_session';
-        $session_condition = array('session_id' => $session_id);
-        $checksession = $this->Operations->SearchByCondition($session_table, $session_condition);
-        
-         $wallet_id = $checksession[0]['wallet_id'];
-         
-         $loggedtime = $checksession[0]['created_on'];
-            
-        $currentTime = $this->date;
-        
-        
-        $loggedTimestamp = strtotime($loggedtime);
-        $currentTimestamp = strtotime($currentTime);
-        $timediff = $currentTimestamp - $loggedTimestamp;
-  
-    
-        if (empty($checksession) || $checksession[0]['session_id'] !== $session_id) {
-            $response['status'] = 'fail';
-            $response['message'] = 'Invalid session_id or user not logged in';
-            $response['data'] = null;
-            echo json_encode($response);
-            exit();
-        }
-
-        else
-        {
-            $summary = $this->Operations->customer_transection_summary($wallet_id);
-            //get our buy rate 
-            $buyratecondition = array('exchange_type'=>1,'service_type'=>1);
-            $buyrate = $this->Operations->SearchByConditionBuy('exchange',$buyratecondition);
-            // Remove commas and convert to float
-            $total_credit = (float) str_replace(',', '', $summary[0][0]['total_credit']);
-            $total_debit = (float) str_replace(',', '', $summary[1][0]['total_debit']);
-        
-            // Calculate the balance in KES
-            $total_balance_kes = $total_credit - $total_debit;
-        
-            // Convert the balance to USD using the conversion rate
-            $conversionRate = $buyrate[0]['kes'];
-            $boughtbuy = $buyrate[0]['bought_at'];
-            $total_balance_usd = $total_balance_kes / $conversionRate;
-            // Now you have the balance in USD
-            $total_balance_usd_formatted = number_format($total_balance_usd, 2);
-            $amountUSD = round($amount / $conversionRate,2);
-        
-            $chargePercent = 0;
-            $chargeAmount = $amountUSD * $chargePercent;
-    
-            // Deduct the charge from the input amount 
-            $amountUSDAfterCharge = $amountUSD - $chargeAmount;
-    
-            $amountKESAfterCharge = ((float)$chargeAmount * (float)$conversionRate);
-    
-            // Check if the amount is greater than $1
-            if ($amountUSD < 1) {
-                $response['status'] = 'error';
-                $response['message'] = 'The amount must be greater than $1.';
-                $response['data'] = null;
-
-            } elseif ($total_balance_usd_formatted < $amountUSD) {
-                $response['status'] = 'error';
-                $response['message'] = 'You dont have sufficient funds in your wallet';
-                $response['data'] = null;
-
-            } else {
-                $table = 'deriv_deposit_request';
-                $condition1 = array('wallet_id'=>$wallet_id);
-                $searchUser = $this->Operations->SearchByCondition('customers',$condition1);
-                $phone = $searchUser[0]['phone'];
-                
-                $mycharge = ($buyrate[0]['kes'] - $boughtbuy);
-                $newcharge = (float)$mycharge * $amountUSD;
-
-                $transaction_number = $this->transaction_number;
-               
-
-                $data = array(
-                    'transaction_id'=>$transaction_id,
-                    'transaction_number'=>$transaction_number,
-                    'wallet_id'=>$wallet_id,
-                    'cr_number'=>$crNumber,
-                    'amount'=>$amountUSD,
-                    'rate'=>$conversionRate,
-                    'status'=>0,
-                    'deposited'=>0,
-                    'bought_at'=>$boughtbuy,
-                    'request_date'=>$this->date,
-                );
-                $save = $this->Operations->Create($table, $data);
-    
-                $paymethod = 'STEPAKASH';
-                $description = 'Deposit to deriv';
-                $currency = 'USD';
-                $dateTime = $this->date;
-    
-                $totalAmountKES = $amountKESAfterCharge + $amount;
-
-                $cr_dr = 'dr';
-                $customer_ledger_data = array(
-                    'transaction_id'    =>    $transaction_id,
-                    'transaction_number' => $transaction_number,
-                    'description'        =>    $description,
-                    'pay_method' => $paymethod,
-                    'wallet_id' => $wallet_id,
-                    'paid_amount' => $amount,
-                    'cr_dr'=>$cr_dr,
-                    'deriv'=>1,
-                    'trans_date' => $this->date,
-                    'currency' => $currency,
-                    'amount' => $amountUSD,
-                    'rate' => $conversionRate,
-                    'chargePercent' =>$chargePercent,
-                    'charge' =>$newcharge,
-                    'total_amount' =>$totalAmountKES,
-                    'status' => 1,
-                    'created_at' => $this->date,
-                );
-                $save_customer_ledger = $this->Operations->Create('customer_ledger',$customer_ledger_data);
-    
-                $system_ledger_data = array(
-                    'transaction_id'    =>    $transaction_id,
-                    'transaction_number' => $transaction_number,
-                    'description'        =>    $description,
-                    'pay_method' => $paymethod,
-                    'wallet_id' => $wallet_id,
-                    'paid_amount' => $amount,
-                    'cr_dr'=>$cr_dr,
-                    'deriv'=>1,
-                    'trans_date' => $this->date,
-                    'currency' => $currency,
-                    'amount' => $amountUSD,
-                    'rate' => $conversionRate,
-                    'chargePercent' =>$chargePercent,
-                    'charge' =>$newcharge,
-                    'total_amount' =>$totalAmountKES,
-                    'status' => 1,
-                    'created_at' => $this->date,
-                );
-                $save_system_ledger = $this->Operations->Create('system_ledger',$system_ledger_data);
-                
-    
-                if($save === TRUE && $save_customer_ledger === TRUE && $save_system_ledger === TRUE) {
-                    
-                    $message = 'Txn ID: ' . $this->transaction_number . ', a deposit of ' . $amountUSD . ' USD is currently being processed.';
-                    
-                    $stevephone = '0703416091';
-                    
-                    $sendadminsms0 = $this->Operations->sendSMS($samphone,$message);
-                    
-                    //SEND USER APP NOTIFICATION 
-                    $sms = $this->Operations->sendSMS($phone, $message);
-                  
-    
-                    $response['status'] = 'success';
-                    $response['message'] = $message;
-                    $response['data'] = null;
-               } else {
-                    $response['status'] = 'fail';
-                    $response['message'] = 'Unable to process your request now try again';
-                    $response['data'] = null;
-                }
-    
-         
-            }
-            
-        }
-    
+{
+    $response = array();
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        http_response_code(400);
+        $response['status'] = 'fail';
+        $response['message'] = 'Only POST request allowed';
         echo json_encode($response);
-    
+        exit();
     }
+
+    // Fetch inputs
+    $crNumber = $this->input->post('crNumber');
+    $amount = $this->input->post('amount');
+    $session_id = $this->input->post('session_id');
+    $transaction_id = $this->input->post('transaction_id');
+    
+    // Form validation
+    $this->form_validation->set_rules('crNumber', 'crNumber', 'required');
+    $this->form_validation->set_rules('amount', 'amount', 'required|numeric|greater_than[0]');
+    $this->form_validation->set_rules('session_id', 'session_id', 'required');
+    $this->form_validation->set_rules('transaction_id', 'transaction_id', 'required');
+    
+    if ($this->form_validation->run() == FALSE) {
+        $response['status'] = 'fail';
+        $response['message'] = 'crNumber, amount, transaction_id and session_id required';
+        $response['data'] = null;
+        echo json_encode($response);
+        exit();
+    }
+
+    // Validate session
+    $session_condition = array('session_id' => $session_id);
+    $checksession = $this->Operations->SearchByCondition('login_session', $session_condition);
+    
+    if (empty($checksession) || $checksession[0]['session_id'] !== $session_id) {
+        $response['status'] = 'fail';
+        $response['message'] = 'Invalid session_id or user not logged in';
+        $response['data'] = null;
+        echo json_encode($response);
+        exit();
+    }
+
+    $wallet_id = $checksession[0]['wallet_id'];
+    $summary = $this->Operations->customer_transection_summary($wallet_id);
+    
+    // Get current rates
+    $buyratecondition = array('exchange_type'=>1,'service_type'=>1);
+    $buyrate = $this->Operations->SearchByConditionBuy('exchange',$buyratecondition);
+    
+    // Calculate balances
+    $total_credit = (float) str_replace(',', '', $summary[0][0]['total_credit']);
+    $total_debit = (float) str_replace(',', '', $summary[1][0]['total_debit']);
+    $total_balance_kes = $total_credit - $total_debit;
+    $conversionRate = $buyrate[0]['kes'];
+    $boughtbuy = $buyrate[0]['bought_at'];
+    $amountUSD = round($amount / $conversionRate, 2);
+
+    // Validate amount
+    if ($amountUSD < 1) {
+        $response['status'] = 'error';
+        $response['message'] = 'The amount must be greater than $1.';
+        $response['data'] = null;
+        echo json_encode($response);
+        exit();
+    } elseif ($total_balance_kes < $amount) {
+        $response['status'] = 'error';
+        $response['message'] = 'You dont have sufficient funds in your wallet';
+        $response['data'] = null;
+        echo json_encode($response);
+        exit();
+    }
+
+    // Create deposit request
+    $table = 'deriv_deposit_request';
+    $transaction_number = $this->transaction_number;
+    $data = array(
+        'transaction_id' => $transaction_id,
+        'transaction_number' => $transaction_number,
+        'wallet_id' => $wallet_id,
+        'cr_number' => $crNumber,
+        'amount' => $amountUSD,
+        'rate' => $conversionRate,
+        'status' => 0, // Pending status
+        'deposited' => 0,
+        'bought_at' => $boughtbuy,
+        'request_date' => $this->date,
+    );
+    
+    $save = $this->Operations->Create($table, $data);
+    
+    if (!$save) {
+        $response['status'] = 'error';
+        $response['message'] = 'Failed to create deposit request';
+        $response['data'] = null;
+        echo json_encode($response);
+        exit();
+    }
+
+    // Attempt to process the deposit automatically
+    $deposit_result = $this->processDerivDeposit($crNumber, $amountUSD, $transaction_id);
+    
+    if ($deposit_result['success']) {
+        // If automatic deposit succeeded
+        $data['status'] = 1;
+        $data['deposited'] = $amountUSD;
+        $this->Operations->UpdateData($table, array('transaction_id' => $transaction_id), $data);
+        
+        // Record the transaction
+        $this->recordDepositTransaction($wallet_id, $transaction_id, $transaction_number, $amount, $amountUSD, $conversionRate, $boughtbuy);
+        
+        $message = 'Txn ID: ' . $transaction_number . ', a deposit of ' . $amountUSD . ' USD has been successfully processed.';
+        $this->sendNotifications($checksession[0]['phone'], $message);
+        
+        $response['status'] = 'success';
+        $response['message'] = $message;
+        $response['data'] = null;
+    } else {
+        // Automatic deposit failed - mark for manual processing
+        $message = 'Txn ID: ' . $transaction_number . ', a deposit of ' . $amountUSD . ' USD is pending manual processing.';
+        $this->sendNotifications($checksession[0]['phone'], $message);
+        
+        $response['status'] = 'pending';
+        $response['message'] = $message;
+        $response['data'] = null;
+    }
+
+    echo json_encode($response);
+}
+
+private function processDerivDeposit($crNumber, $amountUSD, $transaction_id) {
+    // Deriv API credentials
+    $appId = 76420; // Your Deriv app ID
+    $token = 'DidPRclTKE0WYtT'; // Your Deriv agent token
+    
+    try {
+        // Initialize WebSocket client
+        $endpoint = 'ws.binaryws.com';
+        $url = "wss://{$endpoint}/websockets/v3?app_id={$appId}";
+        $client = new Client($url, [], ['timeout' => 10]);
+        
+        // Authorize with token
+        $client->send(json_encode(["authorize" => $token]));
+        $auth_response = json_decode($client->receive(), true);
+        
+        if (empty($auth_response['authorize'])) {
+            return ['success' => false, 'message' => 'Authorization failed'];
+        }
+        
+        // Prepare payment agent transfer
+        $transfer_data = [
+            "paymentagent_transfer" => 1,
+            "amount" => $amountUSD,
+            "transfer_to" => $crNumber,
+            "req_id" => $transaction_id
+        ];
+        
+        $client->send(json_encode($transfer_data));
+        $transfer_response = json_decode($client->receive(), true);
+        
+        if (!empty($transfer_response['error'])) {
+            return ['success' => false, 'message' => $transfer_response['error']['message']];
+        }
+        
+        return ['success' => true, 'message' => 'Transfer successful'];
+    } catch (Exception $e) {
+        return ['success' => false, 'message' => $e->getMessage()];
+    }
+}
+
+private function recordDepositTransaction($wallet_id, $transaction_id, $transaction_number, $amountKES, $amountUSD, $conversionRate, $bought_at) {
+    $chargePercent = 0;
+    $newcharge = (float)($conversionRate - $bought_at) * $amountUSD;
+    $totalAmountKES = $amountKES;
+    
+    // Customer ledger entry
+    $customer_ledger_data = array(
+        'transaction_id' => $transaction_id,
+        'transaction_number' => $transaction_number,
+        'description' => 'Deposit to deriv',
+        'pay_method' => 'STEPAKASH',
+        'wallet_id' => $wallet_id,
+        'paid_amount' => $amountKES,
+        'cr_dr' => 'dr',
+        'deriv' => 1,
+        'trans_date' => $this->date,
+        'currency' => 'USD',
+        'amount' => $amountUSD,
+        'rate' => $conversionRate,
+        'chargePercent' => $chargePercent,
+        'charge' => $newcharge,
+        'total_amount' => $totalAmountKES,
+        'status' => 1,
+        'created_at' => $this->date,
+    );
+    $this->Operations->Create('customer_ledger', $customer_ledger_data);
+    
+    // System ledger entry
+    $system_ledger_data = array(
+        'transaction_id' => $transaction_id,
+        'transaction_number' => $transaction_number,
+        'description' => 'Deposit to deriv',
+        'pay_method' => 'STEPAKASH',
+        'wallet_id' => $wallet_id,
+        'paid_amount' => $amountKES,
+        'cr_dr' => 'dr',
+        'deriv' => 1,
+        'trans_date' => $this->date,
+        'currency' => 'USD',
+        'amount' => $amountUSD,
+        'rate' => $conversionRate,
+        'chargePercent' => $chargePercent,
+        'charge' => $newcharge,
+        'total_amount' => $totalAmountKES,
+        'status' => 1,
+        'created_at' => $this->date,
+    );
+    $this->Operations->Create('system_ledger', $system_ledger_data);
+}
+
+private function sendNotifications($phone, $message) {
+    // Send to user
+    $this->Operations->sendSMS($phone, $message);
+    
+    // Send to admin
+    $admin_phone = '0703416091';
+    $this->Operations->sendSMS($admin_phone, $message);
+}
 
 	
 	public function initiate()
