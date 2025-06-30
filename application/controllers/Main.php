@@ -1323,49 +1323,67 @@ class Main extends CI_Controller {
     public function process_request($request_id)
     {
         if (empty($request_id)) {
-            throw new Exception('Request ID is empty');
+            return [
+                'status' => 'fail',
+                'message' => 'Request ID is empty',
+                'data' => null
+            ];
         }
 
         $table = 'deriv_deposit_request';
         $condition = ['transaction_id' => $request_id];
-        $search = $this->Operations->SearchByCondition($table, $condition);
+        $request = $this->Operations->SearchByCondition($table, $condition);
         
-        if (empty($search)) {
-            throw new Exception('Request not found');
+        if (empty($request)) {
+            return [
+                'status' => 'fail',
+                'message' => 'Request not found',
+                'data' => null
+            ];
         }
         
-        $amount = $search[0]['amount'];
-        $cr_number = $search[0]['cr_number'];
-        $wallet_id = $search[0]['wallet_id'];
-        $transaction_number = $search[0]['transaction_number'];
+        $amount = $request[0]['amount'];
+        $cr_number = $request[0]['cr_number'];
+        $wallet_id = $request[0]['wallet_id'];
+        $transaction_number = $request[0]['transaction_number'];
         
-        // First attempt the Deriv transfer
+        // Attempt the Deriv transfer
         $transferResult = $this->transferToDerivAccount($cr_number, $amount);
         
         if (!$transferResult['success']) {
-            throw new Exception($transferResult['message']);
+            return [
+                'status' => 'error',
+                'message' => 'Transfer failed: ' . $transferResult['message'],
+                'data' => $transferResult['data']
+            ];
         }
         
-        // Only update database if transfer was successful
-        $data = ['status' => 1, 'deposited' => $amount];
-        $update = $this->Operations->UpdateData($table, $condition, $data);
+        // Update database if transfer succeeded
+        $updateData = [
+            'status' => 1,
+            'deposited' => $amount,
+            'processed_at' => $this->date
+        ];
+        
+        $update = $this->Operations->UpdateData($table, $condition, $updateData);
         
         if (!$update) {
-            throw new Exception('Database update failed');
+            return [
+                'status' => 'error',
+                'message' => 'Database update failed',
+                'data' => null
+            ];
         }
         
-        // Notify user
-        $condition1 = ['wallet_id' => $wallet_id];
-        $searchuser = $this->Operations->SearchByCondition('customers', $condition1);
-        $mobile = $searchuser[0]['phone'];
-        $phone = preg_replace('/^(?:\+?254|0)?/', '254', $mobile);
+        // Send confirmation
+        $user = $this->Operations->SearchByCondition('customers', ['wallet_id' => $wallet_id]);
+        $phone = preg_replace('/^(?:\+?254|0)?/', '254', $user[0]['phone']);
         
         $message = "$transaction_number processed, $amount USD deposited to Deriv account $cr_number";
         $this->Operations->sendSMS($phone, $message);
         
         // Notify admin
-        $stevephone = '0703416091';
-        $this->Operations->sendSMS($stevephone, $message);
+        $this->Operations->sendSMS('0703416091', "Deposit completed: $amount USD to $cr_number");
         
         return [
             'status' => 'success',
@@ -1383,88 +1401,82 @@ class Main extends CI_Controller {
      * @throws Exception If connection to Deriv WebSocket fails or if transfer fails
      */
 
-   private function transferToDerivAccount($loginid, $amount)
+    private function transferToDerivAccount($loginid, $amount)
     {
         try {
             $appId = 76420; 
-            $endpoint = 'ws.derivws.com'; // Changed from ws.binaryws.com
-            $url = "wss://{$endpoint}/websockets/v3?app_id={$appId}";
-
-            // Consider storing token more securely
-            $token = 'DidPRclTKE0WYtT';
+            $url = "wss://ws.derivws.com/websockets/v3?app_id={$appId}";
+            $token = 'DidPRclTKE0WYtT'; 
             
-            $client = new Client($url, [
+            $client = new Client($url, [], [
                 'timeout' => 30,
                 'headers' => [
-                    'Connection' => 'Upgrade',
-                    'Upgrade' => 'websocket',
-                    'Sec-WebSocket-Version' => 13,
+                    'Content-Type' => 'application/json'
                 ]
             ]);
             
-            // 1. First authorize with Payment Agent token
-            $authRequest = json_encode(["authorize" => $token]);
-            $client->send($authRequest);
-            
-            // Add logging
-            file_put_contents('deriv_websocket.log', "Sent auth request: $authRequest\n", FILE_APPEND);
-            
+            // 1. Authorize with Payment Agent token
+            $client->send(json_encode(["authorize" => $token]));
             $authResponse = $client->receive();
             $authData = json_decode($authResponse, true);
             
-            file_put_contents('deriv_websocket.log', "Auth response: $authResponse\n", FILE_APPEND);
-            
             if (isset($authData['error'])) {
-                throw new Exception('Authorization failed: ' . $authData['error']['message']);
+                // Log error
+                file_put_contents('deriv_errors.log', date('Y-m-d H:i:s')." - Auth failed: ".$authData['error']['message']."\n", FILE_APPEND);
+                return [
+                    'success' => false,
+                    'message' => 'Authorization failed: ' . $authData['error']['message'],
+                    'data' => null
+                ];
             }
             
-            // 2. Send ping periodically to keep connection alive
-            $client->send(json_encode(["ping" => 1]));
-            
-            // 3. Make the Payment Agent transfer
+            // 2. Make the transfer
             $transferRequest = [
                 "paymentagent_transfer" => 1,
                 "transfer_to" => $loginid,
                 "amount" => $amount,
                 "currency" => "USD",
-                "description" => "Deposit via Stepakash",
-                "req_id" => $this->transaction_id 
+                "description" => "Deposit via Stepakash"
             ];
             
-            $transferRequestJson = json_encode($transferRequest);
-            $client->send($transferRequestJson);
-            file_put_contents('deriv_websocket.log', "Sent transfer request: $transferRequestJson\n", FILE_APPEND);
-            
+            $client->send(json_encode($transferRequest));
             $transferResponse = $client->receive();
-            file_put_contents('deriv_websocket.log', "Transfer response: $transferResponse\n", FILE_APPEND);
-            
             $transferData = json_decode($transferResponse, true);
             
             $client->close();
             
             if (isset($transferData['error'])) {
-                throw new Exception($transferData['error']['message']);
+                // Log error
+                file_put_contents('deriv_errors.log', date('Y-m-d H:i:s')." - Transfer failed: ".$transferData['error']['message']."\n", FILE_APPEND);
+                return [
+                    'success' => false,
+                    'message' => $transferData['error']['message'],
+                    'data' => $transferData
+                ];
             }
             
-            if (!isset($transferData['paymentagent_transfer'])) {
-                throw new Exception('Unexpected response from Deriv API');
+            if (isset($transferData['paymentagent_transfer']) && $transferData['paymentagent_transfer'] == 1) {
+                // Log success
+                file_put_contents('deriv_success.log', date('Y-m-d H:i:s')." - Transfer successful to $loginid: $amount USD\n", FILE_APPEND);
+                return [
+                    'success' => true,
+                    'message' => 'Transfer successful',
+                    'data' => $transferData
+                ];
             }
             
             return [
-                'success' => true,
-                'message' => 'Transfer successful',
+                'success' => false,
+                'message' => 'Unexpected response from Deriv API',
                 'data' => $transferData
             ];
             
         } catch (Exception $e) {
-            // Log the full error
-            file_put_contents('deriv_websocket_errors.log', 
-                date('Y-m-d H:i:s') . " - Error: " . $e->getMessage() . "\n",
-                FILE_APPEND);
-                
+            // Log connection error
+            file_put_contents('deriv_errors.log', date('Y-m-d H:i:s')." - Connection error: ".$e->getMessage()."\n", FILE_APPEND);
             return [
                 'success' => false,
-                'message' => $e->getMessage(),
+                'message' => 'Connection error: ' . $e->getMessage(),
                 'data' => null
             ];
         }
