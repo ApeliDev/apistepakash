@@ -1,19 +1,19 @@
 <?php
+require_once(APPPATH . 'models/OperationsModel.php'); // Ensure the model is included
 
-/**
- * Enhanced Deriv deposit processing with robust error handling
- */
 class DerivDepositProcessor
 {
     private $appId;
     private $paymentAgentToken;
     private $logFile;
+     private $Operations; // Add this
     
     public function __construct()
     {
         $this->appId = 76420; // Your app ID
         $this->paymentAgentToken = 'DidPRclTKE0WYtT'; // Replace with actual token
         $this->logFile = 'logs/deriv_transactions_' . date('Y-m-d') . '.log';
+        $this->Operations = new OperationsModel();
     }
     
     /**

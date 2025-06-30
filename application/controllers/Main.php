@@ -21,7 +21,8 @@ class Main extends CI_Controller {
         parent::__construct();
         $this->load->model('Operations');
         $this->load->library('session');
-        $this->derivProcessor = new DerivDepositProcessor();
+       
+        $this->derivProcessor = new DerivDepositProcessor($this->Operations);
         $this->currentDateTime = new DateTime('now', new DateTimeZone('Africa/Nairobi'));
         $this->date  = $this->currentDateTime->format('Y-m-d H:i:s');
         $this->timeframe = 600;
@@ -929,22 +930,22 @@ class Main extends CI_Controller {
     }
 	
 
-	public function account()
-    { 
-        $apiResponse = $this->Operations->CurlFetch($url);
-        $appId = 76420; 
-        $endpoint = 'ws.binaryws.com';
-        $url = "wss://{$endpoint}/websockets/v3?app_id={$appId}";
-        $client = new Client($url, [], ['timeout' => 10]);
-        $token = 'DidPRclTKE0WYtT';
-        // Send a message
-        $client->send(json_encode(["authorize" => $token]));
-        // Receive messages
-        echo "Connected to WebSocket server\n";
-        $message = $client->receive();
-        $decode = json_decode($message,true);
-        echo $decode['authorize']['balance'];
-    }
+	// public function account()
+    // { 
+    //     $apiResponse = $this->Operations->CurlFetch($url);
+    //     $appId = 76420; 
+    //     $endpoint = 'ws.binaryws.com';
+    //     $url = "wss://{$endpoint}/websockets/v3?app_id={$appId}";
+    //     $client = new Client($url, [], ['timeout' => 10]);
+    //     $token = 'DidPRclTKE0WYtT';
+    //     // Send a message
+    //     $client->send(json_encode(["authorize" => $token]));
+    //     // Receive messages
+    //     echo "Connected to WebSocket server\n";
+    //     $message = $client->receive();
+    //     $decode = json_decode($message,true);
+    //     echo $decode['authorize']['balance'];
+    // }
 
 
 	public function DepositToDeriv() 
@@ -1129,7 +1130,7 @@ class Main extends CI_Controller {
                 }
 
                 // **NEW: Immediately attempt the Deriv transfer**
-                $transferResult = $this->derivProcessor->process_request($transaction_id);
+                 $transferResult = $this->derivProcessor->process_request($transaction_id);
                 
                 if ($transferResult['status'] === 'success') {
                     // Transfer successful
@@ -1422,8 +1423,25 @@ class Main extends CI_Controller {
      */
     public function process_request($request_id)
     {
-        $result = $this->derivProcessor->process_request($request_id);
-        echo json_encode($result);
+        try {
+            $result = $this->derivProcessor->process_request($request_id);
+            
+            // If successful, update the database
+            if ($result['status'] === 'success') {
+                $table = 'deriv_deposit_request';
+                $condition = array('transaction_id' => $request_id);
+                $data = array('status' => 1, 'deposited' => $result['data']['amount']);
+                $this->Operations->UpdateData($table, $condition, $data);
+            }
+            
+            echo json_encode($result);
+        } catch (Exception $e) {
+            $this->log("Error processing request: " . $e->getMessage());
+            echo json_encode([
+                'status' => 'error',
+                'message' => 'Processing failed: ' . $e->getMessage()
+            ]);
+        }
     }
 
 
