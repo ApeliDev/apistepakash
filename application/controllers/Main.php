@@ -1403,83 +1403,115 @@ class Main extends CI_Controller {
 
     private function transferToDerivAccount($loginid, $amount)
     {
+        $startTime = microtime(true);
+        $this->log("Starting transfer of $amount USD to $loginid");
+
         try {
-            $appId = 76420; 
-            $url = "wss://ws.derivws.com/websockets/v3?app_id={$appId}";
-            $token = 'DidPRclTKE0WYtT'; 
+            $appId = 76420;
+            $url = "wss://ws.derivws.com/websockets/v3?app_id=$appId";
             
-            $client = new Client($url, [], [
-                'timeout' => 30,
-                'headers' => [
-                    'Content-Type' => 'application/json'
-                ]
+            // Configure WebSocket client with appropriate timeouts
+            $client = new Client($url, [
+                'timeout' => 30,           // Connection timeout (seconds)
+                'fragment_size' => 8192,   // Fragment size for messages
+                'heartbeat' => 15,         // Send ping every 15 seconds
             ]);
+
+            // 1. Authorize with token
+            $token = 'DidPRclTKE0WYtT'; // Should be stored securely in production
+            $authRequest = ['authorize' => $token];
             
-            // 1. Authorize with Payment Agent token
-            $client->send(json_encode(["authorize" => $token]));
-            $authResponse = $client->receive();
+            $this->log("Sending auth request");
+            $client->send(json_encode($authRequest));
+            
+            // Wait for auth response with timeout
+            $authResponse = $this->receiveWithTimeout($client, 10);
             $authData = json_decode($authResponse, true);
             
             if (isset($authData['error'])) {
-                // Log error
-                file_put_contents('deriv_errors.log', date('Y-m-d H:i:s')." - Auth failed: ".$authData['error']['message']."\n", FILE_APPEND);
-                return [
-                    'success' => false,
-                    'message' => 'Authorization failed: ' . $authData['error']['message'],
-                    'data' => null
-                ];
+                throw new RuntimeException("Auth failed: " . $authData['error']['message']);
             }
+
+            // 2. Send ping to keep connection alive
+            $this->log("Sending keepalive ping");
+            $client->send(json_encode(['ping' => 1]));
             
-            // 2. Make the transfer
+            // 3. Prepare transfer request
             $transferRequest = [
-                "paymentagent_transfer" => 1,
-                "transfer_to" => $loginid,
-                "amount" => $amount,
-                "currency" => "USD",
-                "description" => "Deposit via Stepakash"
+                'paymentagent_transfer' => 1,
+                'transfer_to' => $loginid,
+                'amount' => $amount,
+                'currency' => 'USD',
+                'description' => 'Deposit via Stepakash',
+                'req_id' => $this->transaction_id,
+                'passthrough' => ['wallet_id' => $this->session->userdata('wallet_id')]
             ];
-            
+
+            $this->log("Sending transfer request");
             $client->send(json_encode($transferRequest));
-            $transferResponse = $client->receive();
+            
+            // Wait for transfer response with timeout
+            $transferResponse = $this->receiveWithTimeout($client, 15);
             $transferData = json_decode($transferResponse, true);
             
-            $client->close();
-            
             if (isset($transferData['error'])) {
-                // Log error
-                file_put_contents('deriv_errors.log', date('Y-m-d H:i:s')." - Transfer failed: ".$transferData['error']['message']."\n", FILE_APPEND);
-                return [
-                    'success' => false,
-                    'message' => $transferData['error']['message'],
-                    'data' => $transferData
-                ];
+                throw new RuntimeException("Transfer failed: " . $transferData['error']['message']);
             }
-            
-            if (isset($transferData['paymentagent_transfer']) && $transferData['paymentagent_transfer'] == 1) {
-                // Log success
-                file_put_contents('deriv_success.log', date('Y-m-d H:i:s')." - Transfer successful to $loginid: $amount USD\n", FILE_APPEND);
-                return [
-                    'success' => true,
-                    'message' => 'Transfer successful',
-                    'data' => $transferData
-                ];
+
+            if (!isset($transferData['paymentagent_transfer'])) {
+                throw new RuntimeException("Unexpected response format");
             }
-            
+
+            $this->log("Transfer completed successfully");
             return [
-                'success' => false,
-                'message' => 'Unexpected response from Deriv API',
+                'success' => true,
+                'message' => 'Transfer successful',
                 'data' => $transferData
             ];
-            
+
         } catch (Exception $e) {
-            // Log connection error
-            file_put_contents('deriv_errors.log', date('Y-m-d H:i:s')." - Connection error: ".$e->getMessage()."\n", FILE_APPEND);
+            $duration = round(microtime(true) - $startTime, 2);
+            $this->log("Transfer failed after {$duration}s: " . $e->getMessage());
             return [
                 'success' => false,
-                'message' => 'Connection error: ' . $e->getMessage(),
+                'message' => $e->getMessage(),
                 'data' => null
             ];
+        } finally {
+            if (isset($client)) {
+                $client->close();
+            }
         }
+    }
+
+    private function receiveWithTimeout($client, $timeout)
+    {
+        $start = time();
+        while (true) {
+            if (time() - $start > $timeout) {
+                throw new RuntimeException("WebSocket response timeout after {$timeout} seconds");
+            }
+            
+            try {
+                if ($client->isConnected()) {
+                    if ($client->hasData()) {
+                        return $client->receive();
+                    }
+                    usleep(100000); // Wait 100ms before checking again
+                } else {
+                    throw new RuntimeException("WebSocket connection lost");
+                }
+            } catch (Exception $e) {
+                throw new RuntimeException("Error receiving data: " . $e->getMessage());
+            }
+        }
+    }
+
+    private function log($message)
+    {
+        // Implement your logging logic here
+        // For example, write to a file or database
+        file_put_contents('deriv_transfer.log', date('Y-m-d H:i:s') . " - " . $message . PHP_EOL, FILE_APPEND);
     }
 
 	public function process_deporequest()
