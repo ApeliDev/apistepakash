@@ -14,6 +14,10 @@ class ComposerStaticInitdf1f81a0630f57ab5fb14da5bc0832c6
     );
 
     public static $prefixLengthsPsr4 = array (
+        'p' => 
+        array (
+            'phpcent\\' => 8,
+        ),
         'W' => 
         array (
             'WebSocket\\' => 10,
@@ -51,6 +55,10 @@ class ComposerStaticInitdf1f81a0630f57ab5fb14da5bc0832c6
     );
 
     public static $prefixDirsPsr4 = array (
+        'phpcent\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/centrifugal/phpcent/src',
+        ),
         'WebSocket\\' => 
         array (
             0 => __DIR__ . '/..' . '/textalk/websocket/lib',

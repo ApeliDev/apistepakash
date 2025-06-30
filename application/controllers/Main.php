@@ -1383,81 +1383,399 @@ class Main extends CI_Controller {
     }
 
 
-    /**
-     * Function to transfer funds to Deriv account
-     * This is a placeholder function. You need to implement the actual API call to Deriv.
-     */
 
-    private function transferToDerivAccount($loginid, $amount)
-    {
-        try {
-            $appId = 76420; // Your app ID
-            $endpoint = 'ws.binaryws.com';
-            $url = "wss://{$endpoint}/websockets/v3?app_id={$appId}";
-            
+/**
+ * Function to transfer funds to Deriv account with comprehensive logging
+ * @param string $loginid Deriv account login ID
+ * @param float $amount Amount to transfer
+ * @return array Response indicating success or failure of the transfer
+ * @throws Exception If connection to Deriv WebSocket fails or if transfer fails
+ */
+private function transferToDerivAccount($loginid, $amount)
+{
+    $logData = [
+        'timestamp' => date('Y-m-d H:i:s'),
+        'loginid' => $loginid,
+        'amount' => $amount,
+        'steps' => []
+    ];
 
-            $token = 'DidPRclTKE0WYtT'; 
+    try {
+        $appId = 76420; 
+        $endpoint = 'ws.binaryws.com';
+        $url = "wss://{$endpoint}/websockets/v3?app_id={$appId}";
+        $token = 'DidPRclTKE0WYtT';
+        
+        $this->logStep($logData, 'INIT', 'Starting transfer process', [
+            'url' => $url,
+            'app_id' => $appId,
+            'token_length' => strlen($token)
+        ]);
+
+        // Initialize WebSocket client with more options
+        $context = [
+            'ssl' => [
+                'verify_peer' => false,
+                'verify_peer_name' => false,
+                'allow_self_signed' => true
+            ]
+        ];
+        
+        $client = new Client($url, [], [
+            'timeout' => 60,
+            'context' => $context,
+            'headers' => [
+                'Origin' => 'https://app.deriv.com',
+                'User-Agent' => 'DerivAPI-PHP-Client/1.0'
+            ]
+        ]);
+        
+        $this->logStep($logData, 'CONNECTION', 'WebSocket client created successfully');
+
+        // Step 1: Authorization
+        $authRequest = ["authorize" => $token];
+        $authRequestJson = json_encode($authRequest);
+        
+        $this->logStep($logData, 'AUTH_REQUEST', 'Sending authorization request', [
+            'request' => $authRequest
+        ]);
+
+        $client->send($authRequestJson);
+        $this->logStep($logData, 'AUTH_SENT', 'Authorization request sent');
+
+        // Receive authorization response with timeout handling
+        $authResponse = $this->receiveWithTimeout($client, 30);
+        $this->logStep($logData, 'AUTH_RESPONSE_RAW', 'Raw authorization response received', [
+            'response' => $authResponse,
+            'length' => strlen($authResponse)
+        ]);
+
+        $authData = json_decode($authResponse, true);
+        $jsonError = json_last_error();
+        
+        if ($jsonError !== JSON_ERROR_NONE) {
+            $this->logStep($logData, 'AUTH_JSON_ERROR', 'JSON decode error in auth response', [
+                'json_error' => json_last_error_msg(),
+                'raw_response' => $authResponse
+            ]);
             
-            $client = new Client($url, [], ['timeout' => 30]);
-            
-            // 1. First authorize with Payment Agent token
-            $client->send(json_encode(["authorize" => $token]));
-            $authResponse = $client->receive();
-            $authData = json_decode($authResponse, true);
-            
-            if (isset($authData['error'])) {
-                return [
-                    'success' => false,
-                    'message' => 'Authorization failed: ' . $authData['error']['message'],
-                    'data' => null
-                ];
-            }
-            
-            // 2. Make the Payment Agent transfer
-            $transferRequest = [
-                "paymentagent_transfer" => 1,
-                "transfer_to" => $loginid,
-                "amount" => $amount,
-                "currency" => "USD",
-                "description" => "Deposit via Payment Agent"
-            ];
-            
-            $client->send(json_encode($transferRequest));
-            $transferResponse = $client->receive();
-            $transferData = json_decode($transferResponse, true);
-            
-            $client->close();
-            
-            if (isset($transferData['error'])) {
-                return [
-                    'success' => false,
-                    'message' => $transferData['error']['message'],
-                    'data' => $transferData
-                ];
-            }
-            
-            if (isset($transferData['paymentagent_transfer']) && $transferData['paymentagent_transfer'] == 1) {
-                return [
-                    'success' => true,
-                    'message' => 'Transfer successful',
-                    'data' => $transferData
-                ];
-            } else {
-                return [
-                    'success' => false,
-                    'message' => 'Unexpected response from Deriv API',
-                    'data' => $transferData
-                ];
-            }
-            
-        } catch (Exception $e) {
-            return [
+            return $this->returnWithLogs([
                 'success' => false,
-                'message' => 'Connection error: ' . $e->getMessage(),
+                'message' => 'Invalid JSON in authorization response: ' . json_last_error_msg(),
                 'data' => null
-            ];
+            ], $logData);
+        }
+
+        $this->logStep($logData, 'AUTH_RESPONSE_PARSED', 'Authorization response parsed', [
+            'parsed_data' => $authData
+        ]);
+        
+        if (isset($authData['error'])) {
+            $this->logStep($logData, 'AUTH_ERROR', 'Authorization failed', [
+                'error' => $authData['error']
+            ]);
+            
+            return $this->returnWithLogs([
+                'success' => false,
+                'message' => 'Authorization failed: ' . $authData['error']['message'],
+                'data' => $authData
+            ], $logData);
+        }
+
+        if (!isset($authData['authorize'])) {
+            $this->logStep($logData, 'AUTH_MISSING', 'Authorization response missing expected fields', [
+                'response_keys' => array_keys($authData)
+            ]);
+            
+            return $this->returnWithLogs([
+                'success' => false,
+                'message' => 'Authorization response missing expected data',
+                'data' => $authData
+            ], $logData);
+        }
+
+        $this->logStep($logData, 'AUTH_SUCCESS', 'Authorization successful', [
+            'loginid' => $authData['authorize']['loginid'] ?? 'unknown',
+            'currency' => $authData['authorize']['currency'] ?? 'unknown',
+            'is_virtual' => $authData['authorize']['is_virtual'] ?? 'unknown'
+        ]);
+
+        // Step 2: Payment Agent Transfer
+        $transferRequest = [
+            "paymentagent_transfer" => 1,
+            "transfer_to" => $loginid,
+            "amount" => (float)$amount,
+            "currency" => "USD",
+            "description" => "Deposit via Payment Agent"
+        ];
+        
+        $transferRequestJson = json_encode($transferRequest);
+        
+        $this->logStep($logData, 'TRANSFER_REQUEST', 'Sending transfer request', [
+            'request' => $transferRequest,
+            'json' => $transferRequestJson
+        ]);
+
+        $client->send($transferRequestJson);
+        $this->logStep($logData, 'TRANSFER_SENT', 'Transfer request sent');
+
+        // Receive transfer response
+        $transferResponse = $this->receiveWithTimeout($client, 60);
+        $this->logStep($logData, 'TRANSFER_RESPONSE_RAW', 'Raw transfer response received', [
+            'response' => $transferResponse,
+            'length' => strlen($transferResponse)
+        ]);
+
+        $transferData = json_decode($transferResponse, true);
+        $jsonError = json_last_error();
+        
+        if ($jsonError !== JSON_ERROR_NONE) {
+            $this->logStep($logData, 'TRANSFER_JSON_ERROR', 'JSON decode error in transfer response', [
+                'json_error' => json_last_error_msg(),
+                'raw_response' => $transferResponse
+            ]);
+            
+            return $this->returnWithLogs([
+                'success' => false,
+                'message' => 'Invalid JSON in transfer response: ' . json_last_error_msg(),
+                'data' => null
+            ], $logData);
+        }
+
+        $this->logStep($logData, 'TRANSFER_RESPONSE_PARSED', 'Transfer response parsed', [
+            'parsed_data' => $transferData
+        ]);
+
+        // Close connection
+        $client->close();
+        $this->logStep($logData, 'CONNECTION_CLOSED', 'WebSocket connection closed');
+        
+        // Analyze transfer response
+        if (isset($transferData['error'])) {
+            $this->logStep($logData, 'TRANSFER_ERROR', 'Transfer failed', [
+                'error' => $transferData['error']
+            ]);
+            
+            return $this->returnWithLogs([
+                'success' => false,
+                'message' => $transferData['error']['message'],
+                'data' => $transferData
+            ], $logData);
+        }
+        
+        if (isset($transferData['paymentagent_transfer']) && $transferData['paymentagent_transfer'] == 1) {
+            $this->logStep($logData, 'TRANSFER_SUCCESS', 'Transfer completed successfully', [
+                'transaction_id' => $transferData['transaction_id'] ?? 'unknown'
+            ]);
+            
+            return $this->returnWithLogs([
+                'success' => true,
+                'message' => 'Transfer successful',
+                'data' => $transferData
+            ], $logData);
+        } else {
+            $this->logStep($logData, 'TRANSFER_UNEXPECTED', 'Unexpected transfer response', [
+                'response_keys' => array_keys($transferData)
+            ]);
+            
+            return $this->returnWithLogs([
+                'success' => false,
+                'message' => 'Unexpected response from Deriv API',
+                'data' => $transferData
+            ], $logData);
+        }
+        
+    } catch (Exception $e) {
+        $this->logStep($logData, 'EXCEPTION', 'Exception occurred', [
+            'exception_class' => get_class($e),
+            'message' => $e->getMessage(),
+            'code' => $e->getCode(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        
+        return $this->returnWithLogs([
+            'success' => false,
+            'message' => 'Connection error: ' . $e->getMessage(),
+            'data' => null
+        ], $logData);
+    }
+}
+
+/**
+ * Helper function to receive WebSocket message with timeout
+ * @param object $client WebSocket client
+ * @param int $timeout Timeout in seconds
+ * @return string Response message
+ * @throws Exception If timeout occurs
+ */
+private function receiveWithTimeout($client, $timeout = 30)
+{
+    $startTime = time();
+    
+    while (true) {
+        try {
+            $response = $client->receive();
+            if ($response !== null && $response !== '') {
+                return $response;
+            }
+        } catch (Exception $e) {
+            if (time() - $startTime > $timeout) {
+                throw new Exception("Receive timeout after {$timeout} seconds: " . $e->getMessage());
+            }
+            usleep(100000); // Wait 100ms before retry
+        }
+        
+        if (time() - $startTime > $timeout) {
+            throw new Exception("Receive timeout after {$timeout} seconds");
         }
     }
+}
+
+/**
+ * Helper function to log each step of the process
+ * @param array &$logData Reference to log data array
+ * @param string $step Step identifier
+ * @param string $message Step message
+ * @param array $data Additional data (optional)
+ */
+private function logStep(&$logData, $step, $message, $data = [])
+{
+    $stepData = [
+        'step' => $step,
+        'timestamp' => microtime(true),
+        'message' => $message
+    ];
+    
+    if (!empty($data)) {
+        $stepData['data'] = $data;
+    }
+    
+    $logData['steps'][] = $stepData;
+    
+    // Also log to error log for immediate debugging
+    error_log("DERIV_TRANSFER [{$step}]: {$message} " . (!empty($data) ? json_encode($data) : ''));
+}
+
+/**
+ * Helper function to return response with comprehensive logs
+ * @param array $response Response array
+ * @param array $logData Log data
+ * @return array Response with logs
+ */
+private function returnWithLogs($response, $logData)
+{
+    // Calculate total execution time
+    $totalTime = 0;
+    $stepCount = count($logData['steps']);
+    
+    if ($stepCount > 1) {
+        $firstStep = $logData['steps'][0]['timestamp'];
+        $lastStep = $logData['steps'][$stepCount - 1]['timestamp'];
+        $totalTime = round(($lastStep - $firstStep) * 1000, 2); // Convert to milliseconds
+    }
+    
+    $logData['summary'] = [
+        'total_steps' => $stepCount,
+        'execution_time_ms' => $totalTime,
+        'final_status' => $response['success'] ? 'SUCCESS' : 'FAILED'
+    ];
+    
+    // Log the complete transaction
+    error_log("DERIV_TRANSFER_COMPLETE: " . json_encode($logData, JSON_PRETTY_PRINT));
+    
+    // Save detailed logs to file (optional)
+    $this->saveDetailedLogs($logData);
+    
+    // Add logs to response for debugging
+    $response['debug_logs'] = $logData;
+    
+    return $response;
+}
+
+/**
+ * Helper function to save detailed logs to file
+ * @param array $logData Log data to save
+ */
+private function saveDetailedLogs($logData)
+{
+    try {
+        $logFile = __DIR__ . '/logs/deriv_transfer_' . date('Y-m-d') . '.log';
+        $logDir = dirname($logFile);
+        
+        // Create logs directory if it doesn't exist
+        if (!is_dir($logDir)) {
+            mkdir($logDir, 0755, true);
+        }
+        
+        $logEntry = [
+            'session_id' => uniqid(),
+            'timestamp' => date('c'),
+            'data' => $logData
+        ];
+        
+        file_put_contents(
+            $logFile,
+            json_encode($logEntry, JSON_PRETTY_PRINT) . "\n" . str_repeat('-', 80) . "\n",
+            FILE_APPEND | LOCK_EX
+        );
+    } catch (Exception $e) {
+        error_log("Failed to save detailed logs: " . $e->getMessage());
+    }
+}
+
+/**
+ * Function to test WebSocket connection separately
+ * @return array Connection test results
+ */
+private function testDerivConnection()
+{
+    $logData = [
+        'timestamp' => date('Y-m-d H:i:s'),
+        'test_type' => 'connection_test',
+        'steps' => []
+    ];
+
+    try {
+        $appId = 76420;
+        $endpoint = 'ws.binaryws.com';
+        $url = "wss://{$endpoint}/websockets/v3?app_id={$appId}";
+        
+        $this->logStep($logData, 'TEST_START', 'Starting connection test', ['url' => $url]);
+        
+        $client = new Client($url, [], ['timeout' => 30]);
+        $this->logStep($logData, 'TEST_CONNECTED', 'WebSocket connection established');
+        
+        // Test ping
+        $pingRequest = ["ping" => 1];
+        $client->send(json_encode($pingRequest));
+        $this->logStep($logData, 'TEST_PING_SENT', 'Ping sent');
+        
+        $response = $this->receiveWithTimeout($client, 10);
+        $this->logStep($logData, 'TEST_PING_RESPONSE', 'Ping response received', [
+            'response' => $response
+        ]);
+        
+        $client->close();
+        $this->logStep($logData, 'TEST_CLOSED', 'Connection closed successfully');
+        
+        return $this->returnWithLogs([
+            'success' => true,
+            'message' => 'Connection test successful'
+        ], $logData);
+        
+    } catch (Exception $e) {
+        $this->logStep($logData, 'TEST_ERROR', 'Connection test failed', [
+            'error' => $e->getMessage()
+        ]);
+        
+        return $this->returnWithLogs([
+            'success' => false,
+            'message' => 'Connection test failed: ' . $e->getMessage()
+        ], $logData);
+    }
+}
 
 	public function process_deporequest()
 	{
