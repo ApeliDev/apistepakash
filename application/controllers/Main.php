@@ -21,6 +21,7 @@ class Main extends CI_Controller {
         parent::__construct();
         $this->load->model('Operations');
         $this->load->library('session');
+        $this->load->database();
         $this->currentDateTime = new DateTime('now', new DateTimeZone('Africa/Nairobi'));
         $this->date  = $this->currentDateTime->format('Y-m-d H:i:s');
         $this->timeframe = 600;
@@ -948,10 +949,15 @@ class Main extends CI_Controller {
 
 public function DepositToDeriv() 
 {
+    // Extend session timeout before starting operation
+    ini_set('session.gc_maxlifetime', 3600); // 1 hour
+    session_set_cookie_params(3600); // 1 hour
+    
     // Immediately set Deriv operation flag and extend session
     $this->session->set_userdata([
         'is_deriv_operation' => true,
-        'time_frame' => time()
+        'time_frame' => time(),
+        'last_activity' => time() // Add this to track activity
     ]);
 
     $response = array();
@@ -967,13 +973,18 @@ public function DepositToDeriv()
             throw new Exception('All fields are required');
         }
 
-        // Validate session
+        // Validate session with extended check
         $session_condition = array('session_id' => $session_id);
         $checksession = $this->Operations->SearchByCondition('login_session', $session_condition);
         
         if (empty($checksession)) {
             throw new Exception('Session expired. Please login again.');
         }
+
+        // Update session activity in database
+        $this->Operations->UpdateData('login_session', 
+            array('session_id' => $session_id), 
+            array('last_activity' => date('Y-m-d H:i:s')));
 
         $wallet_id = $checksession[0]['wallet_id'];
         
@@ -997,6 +1008,9 @@ public function DepositToDeriv()
             throw new Exception('Insufficient funds');
         }
 
+        // Refresh session before database operations
+        $this->session->set_userdata('time_frame', time());
+
         // Begin database transaction
         $this->db->trans_begin();
         
@@ -1019,8 +1033,14 @@ public function DepositToDeriv()
             throw new Exception('Failed to create deposit record');
         }
 
-        // Process Deriv payment
-        $deposit_result = $this->processDerivDeposit($crNumber, $amountUSD, $transaction_id);
+        // Refresh session before API call
+        $this->session->set_userdata([
+            'time_frame' => time(),
+            'last_activity' => time()
+        ]);
+
+        // Process Deriv payment with session refresh
+        $deposit_result = $this->processDerivDepositWithSession($crNumber, $amountUSD, $transaction_id, $session_id);
         
         if (!$deposit_result['success']) {
             throw new Exception($deposit_result['message']);
@@ -1060,16 +1080,19 @@ public function DepositToDeriv()
             'data' => null
         ];
     } finally {
-        // Clear Deriv operation flag
+        // Clear Deriv operation flag but maintain session
         $this->session->unset_userdata('is_deriv_operation');
-        // Refresh session
-        $this->session->set_userdata('time_frame', time());
+        // Refresh session one final time
+        $this->session->set_userdata([
+            'time_frame' => time(),
+            'last_activity' => time()
+        ]);
     }
     
     echo json_encode($response);
 }
 
-private function processDerivDeposit($crNumber, $amountUSD, $transaction_id) 
+private function processDerivDepositWithSession($crNumber, $amountUSD, $transaction_id, $session_id) 
 {
     $appId = 76420;
     $token = 'DidPRclTKE0WYtT';
@@ -1091,6 +1114,9 @@ private function processDerivDeposit($crNumber, $amountUSD, $transaction_id)
             ]
         ]);
         
+        // Refresh session before authorization
+        $this->refreshSession($session_id);
+        
         // Authorize
         $client->send(json_encode(["authorize" => $token]));
         $auth_response = json_decode($client->receive(), true);
@@ -1098,6 +1124,9 @@ private function processDerivDeposit($crNumber, $amountUSD, $transaction_id)
         if (!isset($auth_response['authorize'])) {
             throw new Exception('Deriv API authorization failed');
         }
+        
+        // Refresh session before transfer
+        $this->refreshSession($session_id);
         
         // Prepare transfer
         $transfer_request = [
@@ -1109,6 +1138,9 @@ private function processDerivDeposit($crNumber, $amountUSD, $transaction_id)
         
         $client->send(json_encode($transfer_request));
         $transfer_response = json_decode($client->receive(), true);
+        
+        // Refresh session after transfer
+        $this->refreshSession($session_id);
         
         if (isset($transfer_response['error'])) {
             throw new Exception($transfer_response['error']['message']);
@@ -1130,16 +1162,104 @@ private function processDerivDeposit($crNumber, $amountUSD, $transaction_id)
     }
 }
 
+// Add these methods to your controller class
 
-	
-	public function initiate()
-	{
-	    $url = APP_INSTANCE.'home.php';
-	    $body = array('req_id'=>$this->transaction_id);
-	    $apiResponse = $this->Operations->CurlPost($url,$body);
-	    //print_r($apiResponse);
-	    echo $apiResponse;
-	    
+private function validateAndRefreshSession($session_id) 
+{
+    // Check if session exists in database
+    $session_condition = array('session_id' => $session_id);
+    $session_data = $this->Operations->SearchByCondition('login_session', $session_condition);
+    
+    if (empty($session_data)) {
+        throw new Exception('Session expired. Please login again.');
+    }
+    
+    // Check session age (optional - adjust time as needed)
+    $session_time = strtotime($session_data[0]['created_at'] ?? $session_data[0]['last_activity']);
+    $current_time = time();
+    $session_age = $current_time - $session_time;
+    
+    // If session is older than 30 minutes, require refresh
+    if ($session_age > 1800) {
+        // Update session activity
+        $this->Operations->UpdateData('login_session', 
+            array('session_id' => $session_id), 
+            array('last_activity' => date('Y-m-d H:i:s')));
+    }
+    
+    // Refresh PHP session
+    $this->session->set_userdata([
+        'time_frame' => time(),
+        'last_activity' => time(),
+        'is_active' => true
+    ]);
+    
+    return $session_data[0];
+}
+
+private function extendSessionTimeout() 
+{
+    // Extend PHP session settings
+    ini_set('session.gc_maxlifetime', 7200); // 2 hours
+    session_set_cookie_params(7200); // 2 hours
+    
+    // If using custom session handling, update here
+    $this->session->set_userdata([
+        'extended_timeout' => true,
+        'timeout_extended_at' => time()
+    ]);
+}
+
+private function isSessionValid($session_id) 
+{
+    try {
+        $session_data = $this->validateAndRefreshSession($session_id);
+        return true;
+    } catch (Exception $e) {
+        return false;
+    }
+}
+
+// Call this at the start of any long-running operation
+private function prepareForLongOperation($session_id) 
+{
+    $this->extendSessionTimeout();
+    $this->validateAndRefreshSession($session_id);
+    
+    // Set operation flag
+    $this->session->set_userdata([
+        'is_long_operation' => true,
+        'operation_start_time' => time()
+    ]);
+}
+
+
+
+private function refreshSession($session_id) 
+{
+    // Update session in database
+    $this->Operations->UpdateData('login_session', 
+        array('session_id' => $session_id), 
+        array('last_activity' => date('Y-m-d H:i:s')));
+    
+    // Update PHP session
+    $this->session->set_userdata([
+        'time_frame' => time(),
+        'last_activity' => time()
+    ]);
+}
+
+
+
+
+    public function initiate()
+    {
+        $url = APP_INSTANCE.'home.php';
+            $body = array('req_id'=>$this->transaction_id);
+            $apiResponse = $this->Operations->CurlPost($url,$body);
+            //print_r($apiResponse);
+            echo $apiResponse;
+            
 	}
 	
 
