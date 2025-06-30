@@ -111,16 +111,22 @@ class DerivDepositProcessor
             
             $this->log("Connecting to WebSocket: $url");
             
-            // Use Ratchet\Client\connect function to establish the connection
-            $conn = \Ratchet\Client\connect($url)->then(
-                function($connection) {
-                    return $connection;
+            // Use ReactPHP or Ratchet WebSocket client for better reliability
+            $conn = null;
+            \Ratchet\Client\connect($url)->then(
+                function($connection) use (&$conn) {
+                    $conn = $connection;
                 },
                 function($e) {
                     throw new Exception("Could not connect: {$e->getMessage()}");
                 }
             );
             
+            // Wait for the connection to be established
+            $waitStart = time();
+            while ($conn === null && (time() - $waitStart) < 10) {
+                usleep(100000); // 0.1 second
+            }
             if (!$conn) {
                 throw new Exception("Failed to establish WebSocket connection");
             }
@@ -204,10 +210,7 @@ class DerivDepositProcessor
             ];
         }
     }
-    
-    /**
-     * Validate Payment Agent account and permissions
-     */
+
     private function validatePaymentAgent()
     {
         try {
@@ -380,6 +383,5 @@ class DerivDepositProcessor
         ];
     }
 }
-
 
 ?>
