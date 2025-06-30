@@ -1455,15 +1455,7 @@ class Main extends CI_Controller {
         echo json_encode($result);
     }
 
-    /**
-     * Test functions for debugging
-     */
-    public function testDerivConnection()
-    {
-        $processor = new DerivDepositProcessor();
-        $result = $processor->validatePaymentAgent();
-        echo json_encode($result);
-    }
+    
 
     public function testAccountValidation()
     {
