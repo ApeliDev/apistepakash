@@ -16,48 +16,42 @@ class Main extends CI_Controller {
     private $timeframe;
     
     public function __construct()
-{
-    parent::__construct();
-    $this->load->model('Operations');
-    $this->load->library('session');
-    
-    // Set timezone and current date
-    $this->currentDateTime = new DateTime('now', new DateTimeZone('Africa/Nairobi'));
-    $this->date = $this->currentDateTime->format('Y-m-d H:i:s');
-    
-    // Check if this is a Deriv operation
-    $is_deriv_operation = $this->session->userdata('is_deriv_operation');
-    
-    // Set timeout: 30 minutes for Deriv operations, 10 minutes for normal
-    $this->timeframe = $is_deriv_operation ? 1800 : 600;
-    
-    // Generate transaction IDs if needed
-    $transaction_id = $this->session->userdata('transaction_id');
-    $time_frame = $this->session->userdata('time_frame');
-    $valid_time_frame = $time_frame && (time() - $time_frame <= 30);
-    
-    if (!$transaction_id || !$valid_time_frame) {
-        $transaction_id = $this->Operations->OTP(6);
-        $transaction_number = $this->GenerateNextTransaction();
-        $this->transaction_number = $transaction_number;
-        $time_frame = time();
+    {
         
-        $this->session->set_userdata([
-            'transaction_id' => $transaction_id,
-            'time_frame' => $time_frame
-        ]);
+        parent::__construct();
+        $this->load->model('Operations');
+        $this->load->library('session');
+        $this->currentDateTime = new DateTime('now', new DateTimeZone('Africa/Nairobi'));
+        $this->date  = $this->currentDateTime->format('Y-m-d H:i:s');
+        $this->timeframe = 600;
+        // Check if transaction_id and time_frame are already set in the session
+        $transaction_id = $this->session->userdata('transaction_id');
+        $time_frame = $this->session->userdata('time_frame');
+    
+        // Check if the stored time_frame is still valid (within the allowed time frame)
+        $valid_time_frame = $time_frame && (time() - $time_frame <= 30);
+    
+        // If transaction_id is not set or the time_frame is not valid, generate new values
+        if (!$transaction_id || !$valid_time_frame) {
+            $transaction_id = $this->Operations->OTP(6);
+            $transaction_number =  $this->GenerateNextTransaction();
+            $this->transaction_number = $transaction_number;
+            $time_frame = time();
+            // Set transaction_id and time_frame in the session
+            $this->session->set_userdata('transaction_id', $transaction_id);
+            $this->session->set_userdata('time_frame', $time_frame);
+        }
+        // Set transaction_id in $this->transaction_id
+        $this->transaction_id = $transaction_id;
+        $partner_transaction_number =  $this->GeneratePartnerNextTransaction();
+        $this->partner_transaction_number = $partner_transaction_number;
+        header('Content-Type: application/json');
+        // header("Access-Control-Allow-Origin: $origin");
+        header("Access-Control-Allow-Origin: * ");
+        header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+        header('Access-Control-Allow-Headers: Content-Type');
+        header('Access-Control-Max-Age: 86400');
     }
-    
-    $this->transaction_id = $transaction_id;
-    $this->partner_transaction_number = $this->GeneratePartnerNextTransaction();
-    
-    // Set headers
-    header('Content-Type: application/json');
-    header("Access-Control-Allow-Origin: *");
-    header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-    header('Access-Control-Allow-Headers: Content-Type');
-    header('Access-Control-Max-Age: 86400');
-}
 
 	
 
@@ -1136,15 +1130,6 @@ private function processDerivDeposit($crNumber, $amountUSD, $transaction_id)
     }
 }
 
-public function keepalive()
-{
-    // Refresh session
-    $this->session->set_userdata('time_frame', time());
-    
-    // Return minimal response
-    header('Content-Type: application/json');
-    echo json_encode(['status' => 'alive', 'timestamp' => time()]);
-}
 
 	
 	public function initiate()
