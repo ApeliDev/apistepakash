@@ -570,101 +570,85 @@ class Main extends CI_Controller {
      */
 
     private function transferToDerivAccount($loginid, $amount)
-{
-    try {
-        $appId = 76420; 
-        $url = "wss://ws.derivws.com/websockets/v3?app_id={$appId}";
-        $token = 'DidPRclTKE0WYtT'; 
-        
-        $client = new Client($url, [], [
-            'timeout' => 30,
-            'headers' => [
-                'Content-Type' => 'application/json'
-            ]
-        ]);
-        
-        // 1. Authorize with Payment Agent token
-        $authRequest = ["authorize" => $token];
-        $client->send(json_encode($authRequest));
-        $authResponse = $client->receive();
-        $authData = json_decode($authResponse, true);
-        
-        // Log all requests and responses for debugging
-        file_put_contents('deriv_debug.log', date('Y-m-d H:i:s')." - Auth Request: ".json_encode($authRequest)."\n", FILE_APPEND);
-        file_put_contents('deriv_debug.log', date('Y-m-d H:i:s')." - Auth Response: ".$authResponse."\n", FILE_APPEND);
-        
-        if (isset($authData['error'])) {
-            $client->close();
-            file_put_contents('deriv_errors.log', date('Y-m-d H:i:s')." - Auth failed: ".$authData['error']['message']."\n", FILE_APPEND);
-            return [
-                'success' => false,
-                'message' => 'Authorization failed: ' . $authData['error']['message'],
-                'data' => $authData
+    {
+        try {
+            $appId = 76420; 
+            $url = "wss://ws.derivws.com/websockets/v3?app_id={$appId}";
+            $token = 'DidPRclTKE0WYtT'; 
+            
+            $client = new Client($url, [], [
+                'timeout' => 30,
+                'headers' => [
+                    'Content-Type' => 'application/json'
+                ]
+            ]);
+            
+            // 1. Authorize with Payment Agent token
+            $client->send(json_encode(["authorize" => $token]));
+            $authResponse = $client->receive();
+            $authData = json_decode($authResponse, true);
+            
+            if (isset($authData['error'])) {
+                // Log error
+                file_put_contents('deriv_errors.log', date('Y-m-d H:i:s')." - Auth failed: ".$authData['error']['message']."\n", FILE_APPEND);
+                return [
+                    'success' => false,
+                    'message' => 'Authorization failed: ' . $authData['error']['message'],
+                    'data' => null
+                ];
+            }
+            
+            // 2. Make the transfer
+            $transferRequest = [
+                "paymentagent_transfer" => 1,
+                "transfer_to" => $loginid,
+                "amount" => $amount,
+                "currency" => "USD",
+                "description" => "Deposit via Stepakash"
             ];
-        }
-        
-        // Verify authorization was successful
-        if (!isset($authData['authorize']) || $authData['authorize']['loginid'] !== 'CR5126436') {
+            
+            $client->send(json_encode($transferRequest));
+            $transferResponse = $client->receive();
+            $transferData = json_decode($transferResponse, true);
+            
             $client->close();
+            
+            if (isset($transferData['error'])) {
+                // Log error
+                file_put_contents('deriv_errors.log', date('Y-m-d H:i:s')." - Transfer failed: ".$transferData['error']['message']."\n", FILE_APPEND);
+                return [
+                    'success' => false,
+                    'message' => $transferData['error']['message'],
+                    'data' => $transferData
+                ];
+            }
+            
+            if (isset($transferData['paymentagent_transfer']) && $transferData['paymentagent_transfer'] == 1) {
+                // Log success
+                file_put_contents('deriv_success.log', date('Y-m-d H:i:s')." - Transfer successful to $loginid: $amount USD\n", FILE_APPEND);
+                return [
+                    'success' => true,
+                    'message' => 'Transfer successful',
+                    'data' => $transferData
+                ];
+            }
+            
             return [
                 'success' => false,
-                'message' => 'Authorization verification failed',
-                'data' => $authData
-            ];
-        }
-        
-        // 2. Make the transfer
-        $transferRequest = [
-            "paymentagent_transfer" => 1,
-            "transfer_to" => $loginid,
-            "amount" => $amount,
-            "currency" => "USD",
-            "description" => "Deposit via Stepakash"
-        ];
-        
-        $client->send(json_encode($transferRequest));
-        $transferResponse = $client->receive();
-        $transferData = json_decode($transferResponse, true);
-        
-        // Log transfer request and response
-        file_put_contents('deriv_debug.log', date('Y-m-d H:i:s')." - Transfer Request: ".json_encode($transferRequest)."\n", FILE_APPEND);
-        file_put_contents('deriv_debug.log', date('Y-m-d H:i:s')." - Transfer Response: ".$transferResponse."\n", FILE_APPEND);
-        
-        $client->close();
-        
-        if (isset($transferData['error'])) {
-            file_put_contents('deriv_errors.log', date('Y-m-d H:i:s')." - Transfer failed: ".$transferData['error']['message']."\n", FILE_APPEND);
-            return [
-                'success' => false,
-                'message' => $transferData['error']['message'],
+                'message' => 'Unexpected response from Deriv API',
                 'data' => $transferData
             ];
-        }
-        
-        if (isset($transferData['paymentagent_transfer']) && $transferData['paymentagent_transfer'] == 1) {
-            file_put_contents('deriv_success.log', date('Y-m-d H:i:s')." - Transfer successful to $loginid: $amount USD - Transaction ID: ".$transferData['transaction_id']."\n", FILE_APPEND);
+            
+        } catch (Exception $e) {
+            // Log connection error
+            file_put_contents('deriv_errors.log', date('Y-m-d H:i:s')." - Connection error: ".$e->getMessage()."\n", FILE_APPEND);
             return [
-                'success' => true,
-                'message' => 'Transfer successful',
-                'data' => $transferData
+                'success' => false,
+                'message' => 'Connection error: ' . $e->getMessage(),
+                'data' => null
             ];
         }
-        
-        return [
-            'success' => false,
-            'message' => 'Unexpected response from Deriv API',
-            'data' => $transferData
-        ];
-        
-    } catch (Exception $e) {
-        file_put_contents('deriv_errors.log', date('Y-m-d H:i:s')." - Connection error: ".$e->getMessage()."\n", FILE_APPEND);
-        return [
-            'success' => false,
-            'message' => 'Connection error: ' . $e->getMessage(),
-            'data' => null
-        ];
     }
-}
 
 	public function process_deporequest()
 	{
