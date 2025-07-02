@@ -431,142 +431,86 @@ class Main extends CI_Controller {
      * @throws Exception If connection to Deriv WebSocket fails or if transfer fails
      */
 
-    private function transferToDerivAccount($loginid, $amountUSD, $transaction_id) 
-{
-    $config = [
-        'app_id' => 76420,
-        'url' => 'wss://ws.derivws.com/websockets/v3',
-        'token' => 'DidPRclTKE0WYtT',
-        'timeout' => 15
-    ];
-
-    try {
-        $client = new Client("{$config['url']}?app_id={$config['app_id']}", [], [
-            'timeout' => $config['timeout']
-        ]);
-
-        // 1. Authenticate
-        $client->send(json_encode(["authorize" => $config['token']]));
-        $authResponse = json_decode($client->receive(), true);
-
-        if (isset($authResponse['error'])) {
-            throw new Exception($authResponse['error']['message']);
-        }
-
-        // 2. Execute Transfer
-        $transferRequest = [
-            "paymentagent_transfer" => 1,
-            "transfer_to" => $loginid,
-            "amount" => $amountUSD,
-            "currency" => "USD",
-            "req_id" => $transaction_id,
-            "description" => "Deposit via Stepakash"
-        ];
-
-        $client->send(json_encode($transferRequest));
-        $transferResponse = json_decode($client->receive(), true);
-        $client->close();
-
-        if (isset($transferResponse['error'])) {
-            throw new Exception($transferResponse['error']['message']);
-        }
-
-        return [
-            'success' => true,
-            'message' => 'Transfer completed',
-            'data' => $transferResponse
-        ];
-
-    } catch (Exception $e) {
-        return [
-            'success' => false,
-            'message' => $e->getMessage(),
-            'data' => null
-        ];
-    }
-}
-
-private function saveSuccessfulTransaction(
-    $wallet_id,
-    $crNumber,
-    $amountKES,
-    $amountUSD,
-    $conversionRate,
-    $transaction_id,
-    $derivData
-) {
-    $transaction_number = $this->GenerateNextTransaction();
-
-    // Main deposit record
-    $this->Operations->Create('deriv_deposit_request', [
-        'transaction_id' => $transaction_id,
-        'transaction_number' => $transaction_number,
-        'wallet_id' => $wallet_id,
-        'cr_number' => $crNumber,
-        'amount' => $amountUSD,
-        'rate' => $conversionRate,
-        'status' => 1, // Completed
-        'deposited' => $amountUSD,
-        'request_date' => $this->date,
-        'processed_at' => $this->date,
-        'deriv_response' => json_encode($derivData)
-    ]);
-
-    // Ledger entry
-    $this->Operations->Create('customer_ledger', [
-        'transaction_id' => $transaction_id,
-        'transaction_number' => $transaction_number,
-        'wallet_id' => $wallet_id,
-        'paid_amount' => $amountKES,
-        'amount' => $amountUSD,
-        'cr_dr' => 'dr',
-        'currency' => 'USD',
-        'rate' => $conversionRate,
-        'description' => 'Deriv Deposit',
-        'status' => 1,
-        'created_at' => $this->date
-    ]);
-
-    return $transaction_number;
-}
-
-
-private function validateDepositInputs() 
-{
-    $required = ['crNumber', 'amount', 'session_id', 'transaction_id'];
-    foreach ($required as $field) {
-        if (empty($this->input->post($field))) {
-            throw new Exception("Missing required field: {$field}", 400);
+    private function transferToDerivAccount($loginid, $amount)
+    {
+        try {
+            $appId = 76420; 
+            $url = "wss://ws.derivws.com/websockets/v3?app_id={$appId}";
+            $token = 'DidPRclTKE0WYtT'; 
+            
+            $client = new Client($url, [], [
+                'timeout' => 30,
+                'headers' => [
+                    'Content-Type' => 'application/json'
+                ]
+            ]);
+            
+            // 1. Authorize with Payment Agent token
+            $client->send(json_encode(["authorize" => $token]));
+            $authResponse = $client->receive();
+            $authData = json_decode($authResponse, true);
+            
+            if (isset($authData['error'])) {
+                // Log error
+                file_put_contents('deriv_errors.log', date('Y-m-d H:i:s')." - Auth failed: ".$authData['error']['message']."\n", FILE_APPEND);
+                return [
+                    'success' => false,
+                    'message' => 'Authorization failed: ' . $authData['error']['message'],
+                    'data' => null
+                ];
+            }
+            
+            // 2. Make the transfer
+            $transferRequest = [
+                "paymentagent_transfer" => 1,
+                "transfer_to" => $loginid,
+                "amount" => $amount,
+                "currency" => "USD",
+                "description" => "Deposit via Stepakash"
+            ];
+            
+            $client->send(json_encode($transferRequest));
+            $transferResponse = $client->receive();
+            $transferData = json_decode($transferResponse, true);
+            
+            $client->close();
+            
+            if (isset($transferData['error'])) {
+                // Log error
+                file_put_contents('deriv_errors.log', date('Y-m-d H:i:s')." - Transfer failed: ".$transferData['error']['message']."\n", FILE_APPEND);
+                return [
+                    'success' => false,
+                    'message' => $transferData['error']['message'],
+                    'data' => $transferData
+                ];
+            }
+            
+            if (isset($transferData['paymentagent_transfer']) && $transferData['paymentagent_transfer'] == 1) {
+                // Log success
+                file_put_contents('deriv_success.log', date('Y-m-d H:i:s')." - Transfer successful to $loginid: $amount USD\n", FILE_APPEND);
+                return [
+                    'success' => true,
+                    'message' => 'Transfer successful',
+                    'data' => $transferData
+                ];
+            }
+            
+            return [
+                'success' => false,
+                'message' => 'Unexpected response from Deriv API',
+                'data' => $transferData
+            ];
+            
+        } catch (Exception $e) {
+            // Log connection error
+            file_put_contents('deriv_errors.log', date('Y-m-d H:i:s')." - Connection error: ".$e->getMessage()."\n", FILE_APPEND);
+            return [
+                'success' => false,
+                'message' => 'Connection error: ' . $e->getMessage(),
+                'data' => null
+            ];
         }
     }
-
-    if ((float)$this->input->post('amount') <= 0) {
-        throw new Exception("Amount must be positive", 400);
-    }
-}
-
-private function validateBalance($userBalanceKES, $requestAmountKES) 
-{
-    if ($userBalanceKES < $requestAmountKES) {
-        throw new Exception("Insufficient balance", 400);
-    }
-}
-
-private function logError(Exception $e) 
-{
-    log_message('error', "[DerivDeposit] {$e->getCode()}: {$e->getMessage()}");
-    
-    file_put_contents(
-        FCPATH.'logs/deriv_failures_'.date('Y-m-d').'.log',
-        json_encode([
-            'time' => $this->date,
-            'error' => $e->getMessage(),
-            'trace' => $e->getTraceAsString(),
-            'input' => $this->input->post()
-        ]).PHP_EOL,
-        FILE_APPEND
-    );
-}
 
 	public function process_deporequest()
 	{
