@@ -1,24 +1,29 @@
 <?php
 defined('BASEPATH') OR exit('No direct script access allowed');
-
+use WebSocket\Client;
 class Main extends CI_Controller {
     
     private $transaction_id;
+
     private $transaction_number;
+    
     private $partner_transaction_number;
+
     private $currentDateTime;
+    
     private $date;
+    
     private $timeframe;
     
     public function __construct()
     {
+        
         parent::__construct();
         $this->load->model('Operations');
         $this->load->library('session');
         $this->currentDateTime = new DateTime('now', new DateTimeZone('Africa/Nairobi'));
         $this->date  = $this->currentDateTime->format('Y-m-d H:i:s');
         $this->timeframe = 600;
-        
         // Check if transaction_id and time_frame are already set in the session
         $transaction_id = $this->session->userdata('transaction_id');
         $time_frame = $this->session->userdata('time_frame');
@@ -41,11 +46,13 @@ class Main extends CI_Controller {
         $partner_transaction_number =  $this->GeneratePartnerNextTransaction();
         $this->partner_transaction_number = $partner_transaction_number;
         header('Content-Type: application/json');
+        // header("Access-Control-Allow-Origin: $origin");
         header("Access-Control-Allow-Origin: * ");
         header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
         header('Access-Control-Allow-Headers: Content-Type');
         header('Access-Control-Max-Age: 86400');
     }
+
 	
 
 	public function index()
