@@ -15,44 +15,43 @@ class Main extends CI_Controller {
     
     private $timeframe;
     
-    public function __construct()
-    {
-        
-        parent::__construct();
-        $this->load->model('Operations');
-        $this->load->library('session');
-        $this->currentDateTime = new DateTime('now', new DateTimeZone('Africa/Nairobi'));
-        $this->date  = $this->currentDateTime->format('Y-m-d H:i:s');
-        $this->timeframe = 600;
-        // Check if transaction_id and time_frame are already set in the session
-        $transaction_id = $this->session->userdata('transaction_id');
-        $time_frame = $this->session->userdata('time_frame');
+   public function __construct()
+{
+    parent::__construct();
+    $this->load->model('Operations');
+    $this->load->library('session');
+    $this->currentDateTime = new DateTime('now', new DateTimeZone('Africa/Nairobi'));
+    $this->date  = $this->currentDateTime->format('Y-m-d H:i:s');
+    $this->timeframe = 600; // 10 minutes
     
-        // Check if the stored time_frame is still valid (within the allowed time frame)
-        $valid_time_frame = $time_frame && (time() - $time_frame <= 30);
-    
-        // If transaction_id is not set or the time_frame is not valid, generate new values
-        if (!$transaction_id || !$valid_time_frame) {
-            $transaction_id = $this->Operations->OTP(6);
-            $transaction_number =  $this->GenerateNextTransaction();
-            $this->transaction_number = $transaction_number;
-            $time_frame = time();
-            // Set transaction_id and time_frame in the session
-            $this->session->set_userdata('transaction_id', $transaction_id);
-            $this->session->set_userdata('time_frame', $time_frame);
-        }
-        // Set transaction_id in $this->transaction_id
-        $this->transaction_id = $transaction_id;
-        $partner_transaction_number =  $this->GeneratePartnerNextTransaction();
-        $this->partner_transaction_number = $partner_transaction_number;
-        header('Content-Type: application/json');
-        // header("Access-Control-Allow-Origin: $origin");
-        header("Access-Control-Allow-Origin: * ");
-        header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-        header('Access-Control-Allow-Headers: Content-Type');
-        header('Access-Control-Max-Age: 86400');
-    }
+    // Check if transaction_id and time_frame are already set in the session
+    $transaction_id = $this->session->userdata('transaction_id');
+    $time_frame = $this->session->userdata('time_frame');
 
+    // FIX: Use consistent timeframe (600 seconds instead of 30)
+    $valid_time_frame = $time_frame && (time() - $time_frame <= $this->timeframe);
+
+    // If transaction_id is not set or the time_frame is not valid, generate new values
+    if (!$transaction_id || !$valid_time_frame) {
+        $transaction_id = $this->Operations->OTP(6);
+        $transaction_number =  $this->GenerateNextTransaction();
+        $this->transaction_number = $transaction_number;
+        $time_frame = time();
+        // Set transaction_id and time_frame in the session
+        $this->session->set_userdata('transaction_id', $transaction_id);
+        $this->session->set_userdata('time_frame', $time_frame);
+    }
+    // Set transaction_id in $this->transaction_id
+    $this->transaction_id = $transaction_id;
+    $partner_transaction_number =  $this->GeneratePartnerNextTransaction();
+    $this->partner_transaction_number = $partner_transaction_number;
+    
+    header('Content-Type: application/json');
+    header("Access-Control-Allow-Origin: * ");
+    header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+    header('Access-Control-Allow-Headers: Content-Type');
+    header('Access-Control-Max-Age: 86400');
+}
 	
 
 	public function index()
@@ -264,13 +263,14 @@ class Main extends CI_Controller {
 
     $wallet_id = $checksession[0]['wallet_id'];
     
-    // Check session timeout
+    // Check session timeout - FIX: Use the same timeframe as defined in constructor
     $loggedtime = $checksession[0]['created_on'];
     $currentTime = $this->date;
     $loggedTimestamp = strtotime($loggedtime);
     $currentTimestamp = strtotime($currentTime);
     $timediff = $currentTimestamp - $loggedTimestamp;
 
+    // FIX: Use consistent timeframe (600 seconds = 10 minutes)
     if ($timediff > $this->timeframe) {
         $response['status'] = 'fail';
         $response['message'] = 'Session expired';
@@ -278,6 +278,10 @@ class Main extends CI_Controller {
         echo json_encode($response);
         exit();
     }
+
+    // FIX: Update session timestamp to prevent premature logout
+    $update_session_data = array('created_on' => $this->date);
+    $this->Operations->UpdateData($session_table, $session_condition, $update_session_data);
 
     // Get user balance and rates
     $summary = $this->Operations->customer_transection_summary($wallet_id);
