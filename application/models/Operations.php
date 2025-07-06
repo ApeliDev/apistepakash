@@ -10,6 +10,8 @@ class Operations extends CI_model
 
 {
 
+
+
     public function CurlPost($url, $body)
 
     {
@@ -275,12 +277,23 @@ class Operations extends CI_model
         return $query->row()->total_withdraw;
     }
 
+
+
+
+
+
+
+
+
     public function getSumOfAmount()
     {
 
         // Use CodeIgniter's Active Record to calculate the sum
 
         $result = array();
+
+
+
         $this->db->select('SUM(paid_amount) AS total_credit');
 
         $this->db->from('customer_ledger');
@@ -1244,18 +1257,134 @@ class Operations extends CI_model
         }
     }
 
+
+
+    //public function sendSMS($mobile,$message)
+
+    // {  
+
+    //     $phone = preg_replace('/^(?:\+?254|0)?/','+254', $mobile);
+
+
+
+    //     	$username = "samsonmunene";
+
+    //     // $password = "Sam200010";
+
+    //     $password = " bMBfkuA`xkZB8jLk";
+
+    //      try {
+
+    //     $xml_request = '
+
+    //     <SMS>
+
+    //         <authentication>
+
+    //             <username>'.$username.'</username>
+
+    //             <password>'.$password.'</password>
+
+    //         </authentication>
+
+    //         <message>
+
+    //             <sender>TAIFABIZ</sender>
+
+    //             <text>' . $message . '. </text>
+
+    //             <recipients>
+
+    //                 <gsm>' . $phone . '</gsm>
+
+    //             </recipients>
+
+    //         </message>
+
+    //     </SMS>
+
+    //     ';
+
+    //     $url = 'http://54.247.191.102/api/v3/sendsms/xml';
+
+    //     $ch = curl_init();
+
+    //     curl_setopt($ch, CURLOPT_URL, $url);
+
+    //     curl_setopt($ch, CURLOPT_POST, true);
+
+    //     curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: applicatio/xml;Accept: */*'));
+
+    //     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+
+    //     curl_setopt($ch, CURLOPT_POSTFIELDS, $xml_request);
+
+    //     $result = curl_exec($ch);
+
+    //     curl_close($ch);
+
+
+
+    //     if($result > 0)
+
+    //     {
+
+    //        $data = array(
+
+    // 		'receiver' => $mobile,
+
+    // 		'message' => $message,
+
+    // 		'created_on' => date('Y-m-d H:i:s'),
+
+    // 		);
+
+    // 	   $this->db->insert('outbox', $data);
+
+
+
+    //     }
+
+
+
+
+
+    //     return $result;
+
+    // } catch(Exception $e) {
+
+    //     echo('Message: ' .$e->getMessage());
+
+    // }
+
+
+
+
+
+    // }
+
+
+
     public function RecordAction($action)
 
     {
+
         $wallet_id = '';
+
         $phone = '';
+
         $data = array(
+
             'wallet_id' => $wallet_id,
+
             'phone' => $phone,
+
             'action' => $action,
+
             'created_on' => date('Y-m-d H:i:s')
 
         );
+
         $this->db->insert('audit', $data);
     }
 
@@ -1265,16 +1394,25 @@ class Operations extends CI_model
 
     public function SaveLoginSession($wallet_id, $phone, $ip_address, $time)
     {
+
         $session = $this->OTP(25);
+
         $data = array(
+
             'session_id' => $session,
+
             'wallet_id' => $wallet_id,
+
             'ip_address' => $ip_address,
+
             'phone' => $phone,
+
             'created_on' => $time
 
         );
+
         $this->db->insert('login_session', $data);
+
         return $session;
     }
 
@@ -1285,16 +1423,26 @@ class Operations extends CI_model
         $session = $this->Generator(14);
 
         $data = array(
+
             'session_id' => $session,
+
             'partner_id' => $partner_id,
+
             'user_id' => $user_id,
+
             'phone' => $phone,
+
             'created_on' => $time
 
         );
+
         $this->db->insert('admin_login_session', $data);
+
         return $session;
     }
+
+
+
 
 
     public function Password_Generator($length)
@@ -1315,27 +1463,44 @@ class Operations extends CI_model
     }
 
 
+
+
+
     public function Generator($length)
 
     {
+
         $string = "";
+
         $chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+
         $size = strlen($chars);
+
         for ($i = 0; $i < $length; $i++) {
+
             $string .= $chars[rand(0, $size - 1)];
         }
 
         return $string;
     }
 
+
+
     public function OTP($length)
+
     {
+
         $string = "";
+
         $chars = "0123456789";
+
         $size = strlen($chars);
+
         for ($i = 0; $i < $length; $i++) {
+
             $string .= $chars[rand(0, $size - 1)];
         }
+
         return $string;
     }
 
@@ -1346,11 +1511,16 @@ class Operations extends CI_model
     {
 
         $string = "";
+
         $chars = "123456789";
+
         $size = strlen($chars);
+
         for ($i = 0; $i < $length; $i++) {
+
             $string .= $chars[rand(0, $size - 1)];
         }
+
         return $string;
     }
 
@@ -1361,6 +1531,7 @@ class Operations extends CI_model
             ->order_by('customer_ledger_id', 'DESC')
             ->limit(1)
             ->get('customer_ledger');
+
         if ($query->num_rows() > 0) {
             $row = $query->row();
             return $row->transaction_number;
@@ -1375,6 +1546,7 @@ class Operations extends CI_model
             ->order_by('partner_ledger_id', 'DESC')
             ->limit(1)
             ->get('partner_ledger');
+
         if ($query->num_rows() > 0) {
             $row = $query->row();
             return $row->transaction_number;
@@ -1398,6 +1570,7 @@ class Operations extends CI_model
             return false;
         }
     }
+
 
     public function auth_session($session_id, $currentTime, $timeframe)
     {
@@ -1443,13 +1616,24 @@ class Operations extends CI_model
                 $senderTotalDebit = (float) str_replace(',', '', number_format($senderSummary[1][0]['total_debit'], 2));
                 $senderTotalBalanceKes = $senderTotalCredit - $senderTotalDebit;
                 $senderTotalBalanceKes = str_replace(',', '', number_format($senderTotalBalanceKes, 2));
+
+
                 $condition1 = array('wallet_id' => $senderWalletID);
+
+
                 $sender_details = $this->SearchByCondition('customers', $condition1);
+
                 $user_transactions = $this->SearchByCondition('customer_ledger', $condition1);
+
+
                 $sender_phone =  $sender_details[0]['phone'];
                 $sender_wallet =  $sender_details[0]['wallet_id'];
                 $created_on =  $sender_details[0]['created_on'];
                 $account_number =  $sender_details[0]['account_number'];
+
+
+
+
                 $user_response = array(
                     'wallet_id' => $sender_wallet,
                     'phone' => $sender_phone,
@@ -1460,11 +1644,13 @@ class Operations extends CI_model
                     'total_balance' => $senderTotalBalanceKes,
                     'transactions' => $user_transactions,
                 );
+
                 $response['status'] = 'success';
                 $response['message'] = 'User logged details';
                 $response['response'] = 1;
                 $response['data'] = $user_response;
             } else if (!empty($checksession) && $checksession[0]['session_id'] != $session_id) {
+
                 $response['status'] = 'error';
                 $response['message'] = 'Invalid Authentication';
                 $response['response'] = 0;
@@ -1477,6 +1663,7 @@ class Operations extends CI_model
 
     public function partner_auth($token, $currentTime, $timeframe)
     {
+
         if (empty($token)) {
             $response['status'] = 'fail';
             $response['message'] = 'token required';
@@ -1491,11 +1678,14 @@ class Operations extends CI_model
             $response['data'] = null;
         } else {
             $session_table = 'admin_login_session';
+
             $session_condition = array('session_id' => $token);
             $checksession = $this->SearchByCondition($session_table, $session_condition);
             $logged_session = $checksession[0]['session_id'];
+
             $loggedtime = $checksession[0]['created_on'];
             // $currentTime = $this->date;
+
             $loggedTimestamp = strtotime($loggedtime);
             $currentTimestamp = $currentTime;
             $timediff = $currentTimestamp - $loggedTimestamp;
@@ -1638,21 +1828,30 @@ class Operations extends CI_model
     {
 
         $senderSummary = $this->Operations->partner_transection_summary($partner_id);
+
         $senderTotalCredit_reserved = (float) str_replace(',', '', number_format($senderSummary[0][0]['total_credit_reserved'], 2));
         $senderTotalDebit_reserved = (float) str_replace(',', '', number_format($senderSummary[3][0]['total_debit_reserved'], 2));
         $senderTotalBalanceKes_reserved = $senderTotalCredit_reserved - $senderTotalDebit_reserved;
         $senderTotalBalanceKes_reserved = str_replace(',', '', number_format($senderTotalBalanceKes_reserved, 2));
+
+
         $senderTotalCredit_active = (float) str_replace(',', '', number_format($senderSummary[1][0]['total_credit_active'], 2));
         $senderTotalDebit_active = (float) str_replace(',', '', number_format($senderSummary[4][0]['total_debit_active'], 2));
         $senderTotalBalanceKes_active = $senderTotalCredit_active - $senderTotalDebit_active;
         $senderTotalBalanceKes_active = str_replace(',', '', number_format($senderTotalBalanceKes_active, 2));
+
         $senderTotalCredit_uncleared = (float) str_replace(',', '', number_format($senderSummary[2][0]['total_credit_uncleared'], 2));
         $senderTotalDebit_uncleared = (float) str_replace(',', '', number_format($senderSummary[5][0]['total_debit_uncleared'], 2));
         $senderTotalBalanceKes_uncleared = $senderTotalCredit_uncleared - $senderTotalDebit_uncleared;
         $senderTotalBalanceKes_uncleared = str_replace(',', '', number_format($senderTotalBalanceKes_uncleared, 2));
+
+
         $condition1 = array('partner_id' => $partner_id);
+
         $sender_details = $this->Operations->SearchByCondition('partners', $condition1);
+
         $user_transactions = $this->Operations->SearchByCondition('partner_ledger', $condition1);
+
         if (!empty($sender_details[0]['partner_id']) || $sender_details[0]['partner_id'] != NULL || $sender_details[0]['partner_id'] != '') {
 
             $partner_phone =  $sender_details[0]['partner_phone'];
@@ -1685,8 +1884,8 @@ class Operations extends CI_model
         // return $senderSummary;
 
     }
-
     //BUSINESS MODULE
+
     public function SystemAudit($partner_id)
     {
 
@@ -1728,6 +1927,7 @@ class Operations extends CI_model
 
 
     //PARTNER MODULE STARTS HERE 
+
     public function get_partners_customers($partner_id)
     {
         // Select distinct wallet_id to count unique customers
@@ -1736,6 +1936,8 @@ class Operations extends CI_model
         $this->db->from('customer_ledger');
         $this->db->where('partner_id', $partner_id);
         $query = $this->db->get();
+
+        // Return the count of unique customers
         return $query->num_rows();
     }
     public function total_partner_cr($partner_id)
@@ -1805,34 +2007,48 @@ class Operations extends CI_model
         return $query->result();
     }
 
+
     //GIFTING 
 
     public function total_gifting()
     {
         $this->db->select('ROUND(SUM(paid_amount),2) AS total_gifts');
+
         $this->db->from('customer_ledger');
+
         $this->db->where(array('deriv' => 14, 'cr_dr' => 'dr'));
+
         $query = $this->db->get();
 
 
 
         if ($query->num_rows() > 0) {
+
             $result = $query->row()->total_gifts;
         } else {
+
             $result = 0;
         }
 
         return $result;
     }
 
+
+
     public function Search_gift()
     {
         $this->db->select('*');
+
         $this->db->from('customer_ledger');
+
         $this->db->where(array('deriv' => 14, 'cr_dr' => 'dr'));
+
         $this->db->order_by('customer_ledger_id DESC');
+
         $query = $this->db->get();
+
         $result = $query->result();
+
         return $result;
     }
 }
