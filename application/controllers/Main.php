@@ -6,6 +6,7 @@ use WebSocket\ConnectionException;
 
 class Main extends CI_Controller
 {
+
     private $transaction_id;
     private $transaction_number;
     private $partner_transaction_number;
@@ -57,10 +58,7 @@ class Main extends CI_Controller
         $this->load->view('login');
     }
 
-    /**
-     * Home method to handle user session and transactions
-     * This method validates the session, retrieves user details, and returns transaction history.
-     */
+
     public function home()
     {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -205,8 +203,6 @@ class Main extends CI_Controller
         header('Content-Type: application/json');
         echo json_encode($response);
     }
-
-
 
     public function get_rates()
     {
@@ -517,29 +513,6 @@ class Main extends CI_Controller
 
         echo json_encode($response);
     }
-
-    // public function DepositToDeriv()
-    // {
-    //     // Basic validation
-    //     $session_validation = $this->validateSession($this->input->post('session_id'));
-    //     if (!$session_validation['valid']) {
-    //         echo json_encode(['status' => 'fail', 'message' => 'Invalid session']);
-    //         return;
-    //     }
-
-    //     // Forward to Laravel service
-    //     $laravelEndpoint = 'https://deposits.stepakash.com/api/initiate-deposit';
-    //     $postData = [
-    //         'session_id' => $this->input->post('session_id'),
-    //         'cr_number' => $this->input->post('crNumber'),
-    //         'amount' => $this->input->post('amount'),
-    //         'transaction_id' => $this->input->post('transaction_id'),
-    //         'wallet_id' => $session_validation['data']['wallet_id']
-    //     ];
-
-    //     $response = $this->Operations->CurlPost($laravelEndpoint, $postData);
-    //     echo $response;
-    // }
 
 
 
@@ -1921,6 +1894,8 @@ class Main extends CI_Controller
             $exchange_type = $this->input->post('exchange_type');
             $charge = $this->input->post('charge');
             $fee = $this->input->post('fee');
+
+
             if (empty($service_type)) {
                 $response['status'] = 'error';
                 $response['message'] = 'Service type is required.';
@@ -5065,12 +5040,14 @@ class Main extends CI_Controller
             $this->form_validation->set_rules('session_id', 'session_id', 'required');
             $this->form_validation->set_rules('partner_id', 'partner_id', 'required');
             $this->form_validation->set_rules('amount', 'amount', 'required');
+
             if ($this->form_validation->run() == FALSE) {
                 // Handle validation errors
                 $response['status'] = 'fail';
                 $response['message'] = 'all fields required';
             } else {
                 $details = $this->Operations->auth_session($session_id, $this->date, $this->timeframe);
+
                 if ($details['response'] == 1) {
                     //do other validations
                     $validate_partner = $this->Operations->PartnerAccount($partner_id);
