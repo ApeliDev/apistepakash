@@ -36,6 +36,7 @@ class Main extends CI_Controller
             $transaction_number = $this->GenerateNextTransaction();
             $this->transaction_number = $transaction_number;
             $time_frame = time();
+
             // Set transaction_id and time_frame in the session
             $this->session->set_userdata('transaction_id', $transaction_id);
             $this->session->set_userdata('time_frame', $time_frame);
@@ -45,6 +46,7 @@ class Main extends CI_Controller
         $this->transaction_id = $transaction_id;
         $partner_transaction_number = $this->GeneratePartnerNextTransaction();
         $this->partner_transaction_number = $partner_transaction_number;
+
         header('Content-Type: application/json');
         header("Access-Control-Allow-Origin: *");
         header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
