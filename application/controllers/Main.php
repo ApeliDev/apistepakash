@@ -60,113 +60,150 @@ class Main extends CI_Controller {
 	
 
     public function home()
-    {
-        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $session_table = 'login_session';
-            $session_id = $this->input->post('session_id');
-            $session_condition = array('session_id' => $session_id);
-            $checksession = $this->Operations->SearchByCondition($session_table, $session_condition);
-            $loggedtime = $checksession[0]['created_on'];
-            $currentTime = $this->date;
-            $loggedTimestamp = strtotime($loggedtime);
-            $currentTimestamp = strtotime($currentTime);
-            $timediff = $currentTimestamp - $loggedTimestamp;
-            // Check if the time difference is more than 1 minute (60 seconds)
-            if (($timediff) >  $this->timeframe) {
-                $response['status'] = 'fail';
-                $response['message'] = 'User logged out';
-                $response['data'] = '';
-            }
-            
-            else if (!empty($checksession) && $checksession[0]['session_id'] == $session_id) {
-                // User is logged in
-                $wallet_id = $checksession[0]['wallet_id'];
-                $user_details = $this->UserAccount($wallet_id);
-                $user_credit =$user_details['total_credit'];
-                $user_debit =$user_details['total_debit'];
-                $user_balance =$user_details['total_balance'];
-                $user_phone = $user_details['phone'];
-                $user_wallet = $user_details['wallet_id'];
-                $user_agent = $user_details['agent'];
-                $summary = $this->Operations->customer_transection_summary($wallet_id);
-                $condition = array('wallet_id' => $wallet_id);
-                $table = 'customer_ledger';
-                $transactions = $this->Operations->SearchByConditionDeriv($table, $condition);
-                $trans_data = [];
-                foreach ($transactions as $key ) {
-                    $trans_detail = $this->mapTransactionDetails($key);
-                    $user_trans['transaction_type'] = $trans_detail['transaction_type'];
-                    $user_trans['status_text'] = $trans_detail['status_text'];
-                    $user_trans['status_color'] = $trans_detail['status_color'];
-                    $user_trans['text_arrow'] = $trans_detail['text_arrow'];
-                    $user_trans['transaction_number'] = $key['transaction_number'];
-                    $user_trans['receipt_no'] = $key['receipt_no'];
-                    $user_trans['pay_method'] = $key['pay_method'];
-                    $user_trans['wallet_id'] = $key['wallet_id'];
-                    $user_trans['trans_id'] = $key['trans_id'];
-                    $user_trans['paid_amount'] = $key['paid_amount'];
-                    $user_trans['amount'] = $key['amount'];
-                    $user_trans['trans_date'] = $key['trans_date'];
-                    $user_trans['currency'] = $key['currency'];
-                    $user_trans['status'] = $key['status']; 
-                    $user_trans['created_at'] = $key['created_at'];
-                    $trans_data[] = $user_trans;
-                 
-                }
-    
-                //get our buy rate
-                $deriv_buy_condition = array('exchange_type' => 1,'service_type'=>1);
-                $buyrate = $this->Operations->SearchByConditionBuy('exchange', $deriv_buy_condition);
-                //get our sell rate
-                $deriv_sell_condition = array('exchange_type' => 2,'service_type'=>1);
-                $sellrate = $this->Operations->SearchByConditionBuy('exchange', $deriv_sell_condition);
-                $transactions = $trans_data;
-                $buyrate = $buyrate[0]['kes'];
-                $sellrate = $sellrate[0]['kes'];
-                $dollar_rates = $this->get_rates();
-                $data = array(
-                    'total_credit' => $user_credit,
-                    'total_debit' => $user_debit,
-                    'total_balance' => $user_balance,
-                    'buyrate' => $buyrate,
-                    'sellrate' => $sellrate,
-
-                    'deriv_buy' => $dollar_rates['deriv_buy'],
-                    'deriv_buy_charge' => $dollar_rates['deriv_buy_charge'],
-                    'deriv_buy_fee' => $dollar_rates['deriv_buy_fee'],
-
-
-                    'deriv_sell' => $dollar_rates['deriv_sell'],
-                    'deriv_sell_charge' => $dollar_rates['deriv_sell_charge'],
-                    'deriv_sell_fee' => $dollar_rates['deriv_sell_fee'],
-
-                    'currentTime' => $timediff,
-                    // 'trans_data' => $trans_data,
-
-                    'transactions' => $transactions,
-                    // Add other keys and values as needed
-                );
-    
-                $response['status'] = 'success';
-                $response['message'] = 'User is logged in';
-                $response['data'] = $data;
-            } else {
-                // User not logged in
-                $response['status'] = 'fail';
-                $response['message'] = 'User not logged in';
-                $response['data'] = null;
-            }
-        } else {
-            // Not a POST request
+{
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        $session_table = 'login_session';
+        $session_id = $this->input->post('session_id');
+        $bypass_timeout = $this->input->post('bypass_timeout'); // New parameter for Deriv operations
+        
+        $session_condition = array('session_id' => $session_id);
+        $checksession = $this->Operations->SearchByCondition($session_table, $session_condition);
+        
+        if (empty($checksession) || $checksession[0]['session_id'] !== $session_id) {
             $response['status'] = 'fail';
-            $response['message'] = 'Invalid request method';
+            $response['message'] = 'User not logged in';
             $response['data'] = null;
+            echo json_encode($response);
+            return;
         }
-    
-        // Send JSON response
-        header('Content-Type: application/json');
-        echo json_encode($response);
+        
+        // Removed timeout validation - sessions never expire during active use
+        // Session is automatically extended on each valid request
+        
+        // User is logged in (and session is valid or timeout bypassed)
+        $wallet_id = $checksession[0]['wallet_id'];
+        $user_details = $this->UserAccount($wallet_id);
+        $user_credit = $user_details['total_credit'];
+        $user_debit = $user_details['total_debit'];
+        $user_balance = $user_details['total_balance'];
+        $user_phone = $user_details['phone'];
+        $user_wallet = $user_details['wallet_id'];
+        $user_agent = $user_details['agent'];
+        $summary = $this->Operations->customer_transection_summary($wallet_id);
+        $condition = array('wallet_id' => $wallet_id);
+        $table = 'customer_ledger';
+        $transactions = $this->Operations->SearchByConditionDeriv($table, $condition);
+        $trans_data = [];
+        
+        foreach ($transactions as $key) {
+            $trans_detail = $this->mapTransactionDetails($key);
+            $user_trans['transaction_type'] = $trans_detail['transaction_type'];
+            $user_trans['status_text'] = $trans_detail['status_text'];
+            $user_trans['status_color'] = $trans_detail['status_color'];
+            $user_trans['text_arrow'] = $trans_detail['text_arrow'];
+            $user_trans['transaction_number'] = $key['transaction_number'];
+            $user_trans['receipt_no'] = $key['receipt_no'];
+            $user_trans['pay_method'] = $key['pay_method'];
+            $user_trans['wallet_id'] = $key['wallet_id'];
+            $user_trans['trans_id'] = $key['trans_id'];
+            $user_trans['paid_amount'] = $key['paid_amount'];
+            $user_trans['amount'] = $key['amount'];
+            $user_trans['trans_date'] = $key['trans_date'];
+            $user_trans['currency'] = $key['currency'];
+            $user_trans['status'] = $key['status'];
+            $user_trans['created_at'] = $key['created_at'];
+            $trans_data[] = $user_trans;
+        }
+
+        //get our buy rate
+        $deriv_buy_condition = array('exchange_type' => 1, 'service_type' => 1);
+        $buyrate = $this->Operations->SearchByConditionBuy('exchange', $deriv_buy_condition);
+        //get our sell rate
+        $deriv_sell_condition = array('exchange_type' => 2, 'service_type' => 1);
+        $sellrate = $this->Operations->SearchByConditionBuy('exchange', $deriv_sell_condition);
+        $transactions = $trans_data;
+        $buyrate = $buyrate[0]['kes'];
+        $sellrate = $sellrate[0]['kes'];
+        $dollar_rates = $this->get_rates();
+        
+        $data = array(
+            'total_credit' => $user_credit,
+            'total_debit' => $user_debit,
+            'total_balance' => $user_balance,
+            'buyrate' => $buyrate,
+            'sellrate' => $sellrate,
+            'deriv_buy' => $dollar_rates['deriv_buy'],
+            'deriv_buy_charge' => $dollar_rates['deriv_buy_charge'],
+            'deriv_buy_fee' => $dollar_rates['deriv_buy_fee'],
+            'deriv_sell' => $dollar_rates['deriv_sell'],
+            'deriv_sell_charge' => $dollar_rates['deriv_sell_charge'],
+            'deriv_sell_fee' => $dollar_rates['deriv_sell_fee'],
+            'currentTime' => isset($timediff) ? $timediff : 0,
+            'transactions' => $transactions,
+        );
+
+        $response['status'] = 'success';
+        $response['message'] = 'User is logged in';
+        $response['data'] = $data;
+        
+        // Update session timestamp if not bypassing timeout
+        if (!$bypass_timeout) {
+            $update_session_data = array('created_on' => $this->date);
+            $this->Operations->UpdateData($session_table, $session_condition, $update_session_data);
+        }
+        
+    } else {
+        // Not a POST request
+        $response['status'] = 'fail';
+        $response['message'] = 'Invalid request method';
+        $response['data'] = null;
     }
+
+    // Send JSON response
+    header('Content-Type: application/json');
+    echo json_encode($response);
+}
+
+/**
+ * Alternative method specifically for Deriv operations session validation
+ */
+public function checkDerivSession()
+{
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        $session_table = 'login_session';
+        $session_id = $this->input->post('session_id');
+        $session_condition = array('session_id' => $session_id);
+        $checksession = $this->Operations->SearchByCondition($session_table, $session_condition);
+        
+        if (empty($checksession) || $checksession[0]['session_id'] !== $session_id) {
+            $response['status'] = 'fail';
+            $response['message'] = 'Invalid session';
+            $response['data'] = null;
+        } else {
+            // For Deriv operations, we only verify session exists, no timeout check
+            $wallet_id = $checksession[0]['wallet_id'];
+            $user_details = $this->UserAccount($wallet_id);
+            
+            $response['status'] = 'success';
+            $response['message'] = 'Session valid';
+            $response['data'] = array(
+                'wallet_id' => $wallet_id,
+                'balance' => $user_details['total_balance']
+            );
+            
+            // Extend session
+            $update_session_data = array('created_on' => $this->date);
+            $this->Operations->UpdateData($session_table, $session_condition, $update_session_data);
+        }
+    } else {
+        $response['status'] = 'fail';
+        $response['message'] = 'Invalid request method';
+        $response['data'] = null;
+    }
+    
+    header('Content-Type: application/json');
+    echo json_encode($response);
+}
 
     public function get_rates()
     {
@@ -263,7 +300,7 @@ class Main extends CI_Controller {
 
 	
     /**
- * Enhanced Deriv deposit function with session validation bypass
+ * Enhanced Deriv deposit function with no session timeout validation
  */
 public function DepositToDeriv() 
 {
@@ -297,20 +334,19 @@ public function DepositToDeriv()
         exit();
     }
 
-    // Simple session existence check without timeout validation for deposits
+    // Get session without timeout validation for deposits
     $session_table = 'login_session';
     $session_condition = array('session_id' => $session_id);
     $checksession = $this->Operations->SearchByCondition($session_table, $session_condition);
     
     if (empty($checksession) || $checksession[0]['session_id'] !== $session_id) {
         $response['status'] = 'fail';
-        $response['message'] = 'Invalid session_id or user not logged in';
+        $response['message'] = 'Invalid session';
         $response['data'] = null;
         echo json_encode($response);
         exit();
     }
 
-    // Get wallet_id from session without timeout checks
     $wallet_id = $checksession[0]['wallet_id'];
 
     // Get user balance and rates
@@ -477,6 +513,7 @@ public function DepositToDeriv()
 
     echo json_encode($response);
 }
+
 
 	
 	public function initiate()
