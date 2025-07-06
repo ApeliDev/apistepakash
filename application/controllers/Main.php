@@ -57,7 +57,10 @@ class Main extends CI_Controller
         $this->load->view('login');
     }
 
-
+    /**
+     * Home method to handle user session and transactions
+     * This method validates the session, retrieves user details, and returns transaction history.
+     */
     public function home()
     {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -202,6 +205,8 @@ class Main extends CI_Controller
         header('Content-Type: application/json');
         echo json_encode($response);
     }
+
+
 
     public function get_rates()
     {
