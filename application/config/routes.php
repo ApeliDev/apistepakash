@@ -50,41 +50,32 @@ defined('BASEPATH') or exit('No direct script access allowed');
 |		my-controller/my-method	-> my_controller/my_method
 */
 
-// USER APP ROUTES
+//USER APP
 $route['default_controller'] = 'welcome';
 $route['signup'] = 'Auth/CreateAccount';
 $route['login'] = 'Auth/Login';
-
-// DERIV AUTHENTICATION ROUTES
+//$route['derivauth'] = 'auth/derivauth';
+// deriv
 $route['DerivOAuth'] = 'Auth/DerivOAuth';
 $route['DerivCallback'] = 'Auth/DerivCallback';
 $route['GetDerivSessionData'] = 'Auth/GetDerivSessionData';
 
-// AUTHENTICATION ROUTES
 $route['sendotp'] = 'Auth/sendotp';
 $route['verifyotp'] = 'Auth/verifyOtp';
 $route['updatepassword'] = 'Auth/updatepassword';
 $route['passwordupdate'] = 'Main/passwordupdate';
 $route['updatephone'] = 'Main/updatephone';
-
-// DERIV TRANSACTION ROUTES (Updated to use Laravel endpoints)
-$route['deriv_withdraw'] = 'Main/WithdrawFromDeriv'; // Will be updated to call Laravel
-$route['deriv_deposit'] = 'Main/DepositToDeriv'; // Updated version that calls Laravel
-$route['process_deriv_deposit'] = 'Api/process_deposit'; // New endpoint for Laravel callbacks
-
-// MPESA ROUTES
+$route['deriv_withdraw'] = 'Main/WithdrawFromDeriv';
+$route['deriv_deposit'] = 'Main/DepositToDeriv';
 $route['deposit_mpesa'] = 'Main/DepositFromMpesa';
 $route['mpesa_withdraw'] = 'Main/WithdrawToMpesa';
+$route['mpesa_deposit'] = 'Main/DepositToDeriv';
 $route['stkresults'] = 'Money/stkresults';
 $route['b2c_result'] = 'Money/b2c_result';
-
-// USER DATA ROUTES
 $route['home_data'] = 'Main/home';
 $route['user_transactions'] = 'Main/transactions';
 $route['balance'] = 'Main/balance';
 $route['outbox'] = 'Main/outbox';
-
-// PAYMENT ROUTES
 $route['send_p2p'] = 'Main/StepakashP2P';
 $route['mpesa_b2c_test'] = 'Main/Mpesa_b2c_test';
 $route['register_url'] = 'Money/register_url';
@@ -94,23 +85,6 @@ $route['next_receipt'] = 'Money/next_receipt';
 $route['query_receipt'] = 'Main/query_receipt';
 $route['pay_now'] = 'Main/pay_now';
 $route['send_gift'] = 'Main/send_gift';
-
-// API ROUTES FOR LARAVEL INTEGRATION
-$route['api/validate_session'] = 'Api/validate_session';
-$route['api/user_data'] = 'Api/user_data';
-$route['api/sell_rate'] = 'Api/sell_rate';
-$route['api/check_transaction'] = 'Api/check_transaction';
-$route['api/pending_withdrawals'] = 'Api/pending_withdrawals';
-$route['api/create_deposit_request'] = 'Api/create_deposit_request';
-$route['api/update_deposit_request'] = 'Api/update_deposit_request';
-$route['api/get_deposit_request'] = 'Api/get_deposit_request';
-$route['api/create_withdrawal_request'] = 'Api/create_withdrawal_request';
-$route['api/update_withdrawal_request'] = 'Api/update_withdrawal_request';
-$route['api/get_withdrawal_request'] = 'Api/get_withdrawal_request';
-$route['api/create_ledger_entries'] = 'Api/create_ledger_entries';
-$route['api/get_user_info'] = 'Api/get_user_info';
-$route['api/send_sms'] = 'Api/send_sms';
-$route['api/get_transactions'] = 'Api/get_transactions';
 
 
 //ADMIN 
