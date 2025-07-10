@@ -21,7 +21,7 @@ class Main extends CI_Controller
         $this->load->library('session');
         $this->currentDateTime = new DateTime('now', new DateTimeZone('Africa/Nairobi'));
         $this->date = $this->currentDateTime->format('Y-m-d H:i:s');
-        $this->timeframe = 1800;
+        $this->timeframe = 1800; // 30 minutes instead of 10 minutes
 
         // Check if transaction_id and time_frame are already set in the session
         $transaction_id = $this->session->userdata('transaction_id');
@@ -261,7 +261,7 @@ class Main extends CI_Controller
 
 
     /**
-     * Enhanced Deriv deposit function that delegates to Laravel endpoint
+     * Enhanced Deriv deposit function with better error handling
      */
     public function DepositToDeriv()
     {
@@ -361,35 +361,24 @@ class Main extends CI_Controller
             exit();
         }
 
-        // Prepare data for Laravel endpoint
-        $depositData = [
-            'session_id' => $session_id,
-            'crNumber' => $crNumber,
-            'amount' => $amount,
-            'transaction_id' => $transaction_id,
-            'wallet_id' => $wallet_id,
-            'conversion_rate' => $conversionRate,
-            'bought_at' => $boughtbuy,
-            'amount_usd' => $amountUSD
-        ];
+        // ATTEMPT DERIV TRANSFER FIRST
+        $transferResult = $this->transferToDerivAccount($crNumber, $amountUSD);
 
-        // Call Laravel endpoint
-        $laravelResponse = $this->callLaravelDepositEndpoint($depositData);
-
-        if (!$laravelResponse['success']) {
+        if (!$transferResult['success']) {
             $response['status'] = 'error';
-            $response['message'] = $laravelResponse['message'];
-            $response['data'] = $laravelResponse['data'] ?? null;
+            $response['message'] = $transferResult['message'];
+            $response['data'] = null;
             echo json_encode($response);
             exit();
         }
 
-        // If Laravel processing was successful, complete local database operations
+        // If transfer successful, proceed with database operations
         $searchUser = $this->Operations->SearchByCondition('customers', array('wallet_id' => $wallet_id));
         $phone = $searchUser[0]['phone'];
-        $transaction_number = $this->transaction_number;
+
         $mycharge = ($buyrate[0]['kes'] - $boughtbuy);
         $newcharge = (float)$mycharge * $amountUSD;
+        $transaction_number = $this->transaction_number;
 
         // Start database transaction
         $this->db->trans_start();
@@ -475,73 +464,12 @@ class Main extends CI_Controller
 
             $response['status'] = 'success';
             $response['message'] = $message;
-            $response['data'] = $laravelResponse['data'];
+            $response['data'] = $transferResult['data'];
         }
 
         echo json_encode($response);
     }
 
-    /**
-     * Helper method to call Laravel deposit endpoint
-     */
-    private function callLaravelDepositEndpoint($data)
-    {
-        $laravelUrl = 'https://deriv.stepakash.com/api/deriv/deposit';
-
-        // Initialize cURL
-        $ch = curl_init();
-
-        // Set cURL options
-        curl_setopt($ch, CURLOPT_URL, $laravelUrl);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Content-Type: application/json',
-            'Accept: application/json',
-            'X-API-KEY: apelisoltech2025'
-        ]);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-
-        // Execute request
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
-        curl_close($ch);
-
-        // Log the request for debugging
-        file_put_contents(
-            'laravel_deposit_requests.log',
-            date('Y-m-d H:i:s') . " - Request: " . json_encode($data) .
-                "\nResponse: " . $response . "\nError: " . $error . "\n\n",
-            FILE_APPEND
-        );
-
-        if ($error) {
-            return [
-                'success' => false,
-                'message' => 'Connection error: ' . $error,
-                'data' => null
-            ];
-        }
-
-        $responseData = json_decode($response, true);
-
-        if ($httpCode !== 200 || !isset($responseData['status']) || $responseData['status'] !== 'success') {
-            return [
-                'success' => false,
-                'message' => $responseData['message'] ?? 'Failed to process deposit with Laravel',
-                'data' => $responseData['data'] ?? null
-            ];
-        }
-
-        return [
-            'success' => true,
-            'message' => $responseData['message'] ?? 'Deposit processed successfully',
-            'data' => $responseData['data'] ?? null
-        ];
-    }
 
     public function initiate()
     {

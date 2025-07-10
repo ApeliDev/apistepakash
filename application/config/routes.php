@@ -1,5 +1,5 @@
 <?php
-defined('BASEPATH') OR exit('No direct script access allowed');
+defined('BASEPATH') or exit('No direct script access allowed');
 
 /*
 | -------------------------------------------------------------------------
@@ -50,34 +50,43 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 |		my-controller/my-method	-> my_controller/my_method
 */
 
-//USER APP
+// USER APP ROUTES
 $route['default_controller'] = 'welcome';
 $route['signup'] = 'Auth/CreateAccount';
 $route['login'] = 'Auth/Login';
-//$route['derivauth'] = 'auth/derivauth';
-// deriv
+
+// DERIV AUTHENTICATION ROUTES
 $route['DerivOAuth'] = 'Auth/DerivOAuth';
 $route['DerivCallback'] = 'Auth/DerivCallback';
 $route['GetDerivSessionData'] = 'Auth/GetDerivSessionData';
 
+// AUTHENTICATION ROUTES
 $route['sendotp'] = 'Auth/sendotp';
 $route['verifyotp'] = 'Auth/verifyOtp';
 $route['updatepassword'] = 'Auth/updatepassword';
 $route['passwordupdate'] = 'Main/passwordupdate';
-$route['updatephone'] = 'Main/updatephone'; 
-$route['deriv_withdraw'] = 'Main/WithdrawFromDeriv'; 
-$route['deriv_deposit'] = 'Main/DepositToDeriv'; 
-$route['deposit_mpesa'] = 'Main/DepositFromMpesa'; 
-$route['mpesa_withdraw'] = 'Main/WithdrawToMpesa'; 
-$route['mpesa_deposit'] = 'Main/DepositToDeriv'; 
+$route['updatephone'] = 'Main/updatephone';
+
+// DERIV TRANSACTION ROUTES (Updated to use Laravel endpoints)
+$route['deriv_withdraw'] = 'Main/WithdrawFromDeriv'; // Will be updated to call Laravel
+$route['deriv_deposit'] = 'Main/DepositToDeriv'; // Updated version that calls Laravel
+$route['process_deriv_deposit'] = 'Api/process_deposit'; // New endpoint for Laravel callbacks
+
+// MPESA ROUTES
+$route['deposit_mpesa'] = 'Main/DepositFromMpesa';
+$route['mpesa_withdraw'] = 'Main/WithdrawToMpesa';
 $route['stkresults'] = 'Money/stkresults';
 $route['b2c_result'] = 'Money/b2c_result';
-$route['home_data'] = 'Main/home'; 
-$route['user_transactions'] = 'Main/transactions'; 
-$route['balance'] = 'Main/balance'; 
-$route['outbox'] = 'Main/outbox'; 
-$route['send_p2p'] = 'Main/StepakashP2P'; 
-$route['mpesa_b2c_test'] = 'Main/Mpesa_b2c_test'; 
+
+// USER DATA ROUTES
+$route['home_data'] = 'Main/home';
+$route['user_transactions'] = 'Main/transactions';
+$route['balance'] = 'Main/balance';
+$route['outbox'] = 'Main/outbox';
+
+// PAYMENT ROUTES
+$route['send_p2p'] = 'Main/StepakashP2P';
+$route['mpesa_b2c_test'] = 'Main/Mpesa_b2c_test';
 $route['register_url'] = 'Money/register_url';
 $route['mpesa_c2b_results'] = 'Money/mpesa_c2b_results';
 $route['validation_url'] = 'Money/validation_url';
@@ -86,35 +95,52 @@ $route['query_receipt'] = 'Main/query_receipt';
 $route['pay_now'] = 'Main/pay_now';
 $route['send_gift'] = 'Main/send_gift';
 
+// API ROUTES FOR LARAVEL INTEGRATION
+$route['api/validate_session'] = 'Api/validate_session';
+$route['api/user_data'] = 'Api/user_data';
+$route['api/sell_rate'] = 'Api/sell_rate';
+$route['api/check_transaction'] = 'Api/check_transaction';
+$route['api/pending_withdrawals'] = 'Api/pending_withdrawals';
+$route['api/create_deposit_request'] = 'Api/create_deposit_request';
+$route['api/update_deposit_request'] = 'Api/update_deposit_request';
+$route['api/get_deposit_request'] = 'Api/get_deposit_request';
+$route['api/create_withdrawal_request'] = 'Api/create_withdrawal_request';
+$route['api/update_withdrawal_request'] = 'Api/update_withdrawal_request';
+$route['api/get_withdrawal_request'] = 'Api/get_withdrawal_request';
+$route['api/create_ledger_entries'] = 'Api/create_ledger_entries';
+$route['api/get_user_info'] = 'Api/get_user_info';
+$route['api/send_sms'] = 'Api/send_sms';
+$route['api/get_transactions'] = 'Api/get_transactions';
+
 
 //ADMIN 
-$route['adminLogin'] = 'Auth/adminLogin'; 
-$route['adminhome'] = 'Main/adminhome'; 
-$route['depositsrequest'] = 'Main/depositsrequest'; 
-$route['withdrawalrequest'] = 'Main/withdrawalrequest'; 
-$route['adminappusers'] = 'Main/adminappusers'; 
-$route['get_user_account'] = 'Main/get_user_account'; 
-$route['adminsystemusers'] = 'Main/adminsystemusers'; 
-$route['viewrate'] = 'Main/viewrate'; 
-$route['setexchange'] = 'Main/setexchange'; 
-$route['get_rates'] = 'Main/get_rates'; 
-$route['create_admin'] = 'Main/AdminCreateAccount'; 
-$route['mpesa_deposits'] = 'Main/mpesa_deposits'; 
-$route['mpesa_withdrawals'] = 'Main/mpesa_withdrawals'; 
-$route['mpesa_withdrawals_transactions'] = 'Main/mpesa_withdrawals_transactions'; 
-$route['b2c_result'] = 'Money/b2c_result'; 
-$route['process_deposit'] = 'Main/process_deporequest'; 
-$route['process_withdrawal'] = 'Main/process_withdrawalrequest'; 
-$route['reject_withdrawal'] = 'Main/reject_withdrawal_request'; 
-$route['deduct_from_wallet'] = 'Main/deduct_from_wallet'; 
+$route['adminLogin'] = 'Auth/adminLogin';
+$route['adminhome'] = 'Main/adminhome';
+$route['depositsrequest'] = 'Main/depositsrequest';
+$route['withdrawalrequest'] = 'Main/withdrawalrequest';
+$route['adminappusers'] = 'Main/adminappusers';
+$route['get_user_account'] = 'Main/get_user_account';
+$route['adminsystemusers'] = 'Main/adminsystemusers';
+$route['viewrate'] = 'Main/viewrate';
+$route['setexchange'] = 'Main/setexchange';
+$route['get_rates'] = 'Main/get_rates';
+$route['create_admin'] = 'Main/AdminCreateAccount';
+$route['mpesa_deposits'] = 'Main/mpesa_deposits';
+$route['mpesa_withdrawals'] = 'Main/mpesa_withdrawals';
+$route['mpesa_withdrawals_transactions'] = 'Main/mpesa_withdrawals_transactions';
+$route['b2c_result'] = 'Money/b2c_result';
+$route['process_deposit'] = 'Main/process_deporequest';
+$route['process_withdrawal'] = 'Main/process_withdrawalrequest';
+$route['reject_withdrawal'] = 'Main/reject_withdrawal_request';
+$route['deduct_from_wallet'] = 'Main/deduct_from_wallet';
 $route['add_user_wallet'] = 'Main/add_user_wallet';
-$route['stepakash_debit_report'] = 'Main/stepakash_debit_report'; 
+$route['stepakash_debit_report'] = 'Main/stepakash_debit_report';
 $route['stepakash_credit_report'] = 'Main/stepakash_credit_report';
-$route['crypto_deposit_request'] = 'Main/crypto_deposit_request'; 
-$route['crypto_withdrawal_request'] = 'Main/crypto_withdrawal_request'; 
-$route['app_audit'] = 'Main/app_audit'; 
-$route['update_user_account'] = 'Main/update_user_account'; 
-$route['active_users'] = 'Main/active_users'; 
+$route['crypto_deposit_request'] = 'Main/crypto_deposit_request';
+$route['crypto_withdrawal_request'] = 'Main/crypto_withdrawal_request';
+$route['app_audit'] = 'Main/app_audit';
+$route['update_user_account'] = 'Main/update_user_account';
+$route['active_users'] = 'Main/active_users';
 $route['cypto_request'] = 'Main/cypto_request';
 $route['process_cypto_deposit'] = 'Main/process_cypto_deposit';
 $route['process_cypto_withdraw'] = 'Main/process_cypto_withdraw';
