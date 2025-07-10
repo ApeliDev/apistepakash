@@ -19,7 +19,7 @@ class Main extends CI_Controller {
         $this->load->library('session');
         $this->currentDateTime = new DateTime('now', new DateTimeZone('Africa/Nairobi'));
         $this->date = $this->currentDateTime->format('Y-m-d H:i:s');
-        $this->timeframe = 1800; // 30 minutes instead of 10 minutes
+        $this->timeframe = 1800; 
         
         // Check if transaction_id and time_frame are already set in the session
         $transaction_id = $this->session->userdata('transaction_id');
