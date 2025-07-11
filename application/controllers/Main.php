@@ -1405,13 +1405,13 @@ class Main extends CI_Controller
     public function b2c($transaction_id, $wallet_id, $crNumber, $phone_no, $Amount)
     {
         $url = 'https://api.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials';
-        $mpesa_consumer_key = 'TzHlW8uxmQASXZ8lzPG7tYmN3ogBM6P2KaGTVGSlABkGtwUC';
-        $mpesa_consumer_secret = 'gzpVFF1kZzGgwQJO9ENHfxSwxgJabYpKRzDu997wi5HDskFuXfdKA0WMGb6OSXGn';
-        $InitiatorName = 'STEVEWEB';
+        $mpesa_consumer_key = 'wC9zwOZCu2XQYAqK7xnH4eYQHfYxOZxuVZARqoONzjVUAljA';
+        $mpesa_consumer_secret = 'rGDcF6VKvrGE6e52gAAve9UWXBnzs1iDwUPaV2kVICLzMHiDtU5W87xJAzNg6KeA';
+        $InitiatorName = 'STEPHENENGEWA';
         $password = '..ken6847musyimI.';
         $ResultURL = 'https://api.stepakash.com/index.php/b2c_result';
         $QueueTimeOutURL = 'https://api.stepakash.com/index.php/b2c_result';
-        $PartyA = '4165647';
+        $PartyA = '4168325';
         $PartyB = $phone_no;
         $curl = curl_init();
         curl_setopt($curl, CURLOPT_URL, $url);
