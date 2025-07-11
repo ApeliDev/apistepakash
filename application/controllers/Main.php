@@ -1140,10 +1140,10 @@ class Main extends CI_Controller
                 $response['message'] = 'User not logged in';
                 $response['data'] = null;
             } else {
-                $mpesa_consumer_key = "wC9zwOZCu2XQYAqK7xnH4eYQHfYxOZxuVZARqoONzjVUAljA";
-                $mpesa_consumer_secret = "rGDcF6VKvrGE6e52gAAve9UWXBnzs1iDwUPaV2kVICLzMHiDtU5W87xJAzNg6KeA";
-                $mpesapass = "ebec65af907979790f37447ef40883542f15b1f65eb42e41e8e53c0ccfae605c";
-                $shortcode = "4168325";
+                $mpesa_consumer_key = "TzHlW8uxmQASXZ8lzPG7tYmN3ogBM6P2KaGTVGSlABkGtwUC";
+                $mpesa_consumer_secret = "gzpVFF1kZzGgwQJO9ENHfxSwxgJabYpKRzDu997wi5HDskFuXfdKA0WMGb6OSXGn";
+                $mpesapass = "e801513141e1054208ee5206db5942c5a69faab9e4a663ab703448ce9d82d144";
+                $shortcode = "4165647";
                 $systemUrl = 'https://api.stepakash.com/index.php/stkresults';
                 $identifierType = "CustomerPayBillOnline";
                 $invoice_number = "STEPAKASH-" . $wallet_id;
@@ -1405,13 +1405,13 @@ class Main extends CI_Controller
     public function b2c($transaction_id, $wallet_id, $crNumber, $phone_no, $Amount)
     {
         $url = 'https://api.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials';
-        $mpesa_consumer_key = 'wC9zwOZCu2XQYAqK7xnH4eYQHfYxOZxuVZARqoONzjVUAljA';
-        $mpesa_consumer_secret = 'rGDcF6VKvrGE6e52gAAve9UWXBnzs1iDwUPaV2kVICLzMHiDtU5W87xJAzNg6KeA';
-        $InitiatorName = 'STEPHENENGEWA';
+        $mpesa_consumer_key = 'TzHlW8uxmQASXZ8lzPG7tYmN3ogBM6P2KaGTVGSlABkGtwUC';
+        $mpesa_consumer_secret = 'gzpVFF1kZzGgwQJO9ENHfxSwxgJabYpKRzDu997wi5HDskFuXfdKA0WMGb6OSXGn';
+        $InitiatorName = 'STEVEWEB';
         $password = '..ken6847musyimI.';
         $ResultURL = 'https://api.stepakash.com/index.php/b2c_result';
         $QueueTimeOutURL = 'https://api.stepakash.com/index.php/b2c_result';
-        $PartyA = '4168325';
+        $PartyA = '4165647';
         $PartyB = $phone_no;
         $curl = curl_init();
         curl_setopt($curl, CURLOPT_URL, $url);
