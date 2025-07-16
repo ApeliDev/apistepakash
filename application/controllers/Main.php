@@ -776,46 +776,128 @@ class Main extends CI_Controller {
     public function checkAgentBalance()
     {
         $appId = 76420; 
-        $endpoint = 'ws.binaryws.com';
-        $url = "wss://{$endpoint}/websockets/v3?app_id={$appId}";
         $token = 'DidPRclTKE0WYtT'; 
         
         try {
-            // Create WebSocket connection
+            // Use cURL for HTTP API instead of WebSocket
+            $url = "https://api.deriv.com/v1/balance";
+            
+            $headers = [
+                'Authorization: Bearer ' . $token,
+                'Content-Type: application/json'
+            ];
+            
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+            
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $error = curl_error($ch);
+            curl_close($ch);
+            
+            if ($error) {
+                throw new Exception("cURL Error: " . $error);
+            }
+            
+            if ($httpCode !== 200) {
+                throw new Exception("HTTP Error: " . $httpCode);
+            }
+            
+            $data = json_decode($response, true);
+            
+            if (isset($data['error'])) {
+                throw new Exception("API Error: " . $data['error']['message']);
+            }
+            
+            return [
+                'success' => true,
+                'balance' => $data['balance']['balance'],
+                'currency' => $data['balance']['currency']
+            ];
+            
+        } catch (Exception $e) {
+            // Fallback to WebSocket if HTTP API fails
+            return $this->checkAgentBalanceWebSocket();
+        }
+    }
+
+    public function checkAgentBalanceWebSocket()
+    {
+        $appId = 76420; 
+        $token = 'DidPRclTKE0WYtT'; 
+        
+        try {
+            // Create a TCP socket connection
+            $host = 'ws.binaryws.com';
+            $port = 443; // Use 443 for WSS
+            
             $context = stream_context_create([
-                'http' => [
-                    'timeout' => 10
+                'ssl' => [
+                    'verify_peer' => false,
+                    'verify_peer_name' => false,
                 ]
             ]);
             
-            $socket = stream_socket_client($url, $errno, $errstr, 10, STREAM_CLIENT_CONNECT, $context);
+            $socket = stream_socket_client(
+                "ssl://{$host}:{$port}", 
+                $errno, 
+                $errstr, 
+                30, 
+                STREAM_CLIENT_CONNECT, 
+                $context
+            );
             
             if (!$socket) {
-                throw new Exception("WebSocket connection failed: $errstr ($errno)");
+                throw new Exception("Socket connection failed: $errstr ($errno)");
             }
             
-            // Send authorization request
-            $authRequest = json_encode([
+            // Send WebSocket handshake
+            $key = base64_encode(pack('H*', sha1(uniqid(mt_rand(), true))));
+            $headers = [
+                "GET /websockets/v3?app_id={$appId} HTTP/1.1",
+                "Host: {$host}",
+                "Upgrade: websocket",
+                "Connection: Upgrade",
+                "Sec-WebSocket-Key: {$key}",
+                "Sec-WebSocket-Version: 13"
+            ];
+            
+            $handshake = implode("\r\n", $headers) . "\r\n\r\n";
+            fwrite($socket, $handshake);
+            
+            // Read handshake response
+            $response = fread($socket, 2048);
+            
+            if (strpos($response, '101 Switching Protocols') === false) {
+                throw new Exception("WebSocket handshake failed");
+            }
+            
+            // Send authorize message
+            $authMessage = json_encode([
                 "authorize" => $token,
                 "req_id" => 1
             ]);
             
-            fwrite($socket, $authRequest . "\n");
-            $authResponse = fgets($socket);
+            $this->sendWebSocketMessage($socket, $authMessage);
+            $authResponse = $this->readWebSocketMessage($socket);
             $authData = json_decode($authResponse, true);
             
             if (isset($authData['error'])) {
                 throw new Exception("Authorization failed: " . $authData['error']['message']);
             }
             
-            // Get balance
-            $balanceRequest = json_encode([
+            // Send balance request
+            $balanceMessage = json_encode([
                 "balance" => 1,
                 "req_id" => 2
             ]);
             
-            fwrite($socket, $balanceRequest . "\n");
-            $balanceResponse = fgets($socket);
+            $this->sendWebSocketMessage($socket, $balanceMessage);
+            $balanceResponse = $this->readWebSocketMessage($socket);
             $balanceData = json_decode($balanceResponse, true);
             
             fclose($socket);
@@ -838,75 +920,202 @@ class Main extends CI_Controller {
         }
     }
 
+
     public function performDerivTransfer($amount, $currency, $transferTo, $description, $requestId)
-    {
-        $appId = 76420; 
-        $endpoint = 'ws.binaryws.com';
-        $url = "wss://{$endpoint}/websockets/v3?app_id={$appId}";
-        $token = 'DidPRclTKE0WYtT';
+{
+    $appId = 76420; 
+    $token = 'DidPRclTKE0WYtT';
+    
+    try {
+        // Use HTTP API first
+        $url = "https://api.deriv.com/v1/paymentagent_transfer";
         
-        try {
-            $context = stream_context_create([
-                'http' => [
-                    'timeout' => 10
-                ]
-            ]);
-            
-            $socket = stream_socket_client($url, $errno, $errstr, 10, STREAM_CLIENT_CONNECT, $context);
-            
-            if (!$socket) {
-                throw new Exception("WebSocket connection failed: $errstr ($errno)");
-            }
-            
-            // Send authorization request
-            $authRequest = json_encode([
-                "authorize" => $token,
-                "req_id" => 1
-            ]);
-            
-            fwrite($socket, $authRequest . "\n");
-            $authResponse = fgets($socket);
-            $authData = json_decode($authResponse, true);
-            
-            if (isset($authData['error'])) {
-                throw new Exception("Authorization failed: " . $authData['error']['message']);
-            }
-            
-            // Perform payment agent transfer
-            $transferRequest = json_encode([
-                "paymentagent_transfer" => 1,
-                "amount" => $amount,
-                "currency" => $currency,
-                "transfer_to" => $transferTo,
-                "description" => $description,
-                "req_id" => $requestId
-            ]);
-            
-            fwrite($socket, $transferRequest . "\n");
-            $transferResponse = fgets($socket);
-            $transferData = json_decode($transferResponse, true);
-            
-            fclose($socket);
-            
-            if (isset($transferData['error'])) {
-                throw new Exception("Transfer failed: " . $transferData['error']['message']);
-            }
-            
-            return [
-                'success' => true,
-                'transaction_id' => $transferData['transaction_id'],
-                'client_to_full_name' => $transferData['client_to_full_name'],
-                'client_to_loginid' => $transferData['client_to_loginid'],
-                'paymentagent_transfer' => $transferData['paymentagent_transfer']
-            ];
-            
-        } catch (Exception $e) {
-            return [
-                'success' => false,
-                'error' => $e->getMessage()
-            ];
+        $data = [
+            'amount' => $amount,
+            'currency' => $currency,
+            'transfer_to' => $transferTo,
+            'description' => $description
+        ];
+        
+        $headers = [
+            'Authorization: Bearer ' . $token,
+            'Content-Type: application/json'
+        ];
+        
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        curl_close($ch);
+        
+        if ($error) {
+            throw new Exception("cURL Error: " . $error);
         }
+        
+        if ($httpCode !== 200) {
+            throw new Exception("HTTP Error: " . $httpCode);
+        }
+        
+        $responseData = json_decode($response, true);
+        
+        if (isset($responseData['error'])) {
+            throw new Exception("Transfer failed: " . $responseData['error']['message']);
+        }
+        
+        return [
+            'success' => true,
+            'transaction_id' => $responseData['transaction_id'],
+            'client_to_full_name' => $responseData['client_to_full_name'],
+            'client_to_loginid' => $responseData['client_to_loginid'],
+            'paymentagent_transfer' => $responseData['paymentagent_transfer']
+        ];
+        
+    } catch (Exception $e) {
+        // Fallback to WebSocket
+        return $this->performDerivTransferWebSocket($amount, $currency, $transferTo, $description, $requestId);
     }
+}
+
+public function performDerivTransferWebSocket($amount, $currency, $transferTo, $description, $requestId)
+{
+    $appId = 76420; 
+    $token = 'DidPRclTKE0WYtT';
+    
+    try {
+        $host = 'ws.binaryws.com';
+        $port = 443;
+        
+        $context = stream_context_create([
+            'ssl' => [
+                'verify_peer' => false,
+                'verify_peer_name' => false,
+            ]
+        ]);
+        
+        $socket = stream_socket_client(
+            "ssl://{$host}:{$port}", 
+            $errno, 
+            $errstr, 
+            30, 
+            STREAM_CLIENT_CONNECT, 
+            $context
+        );
+        
+        if (!$socket) {
+            throw new Exception("Socket connection failed: $errstr ($errno)");
+        }
+        
+        // WebSocket handshake
+        $key = base64_encode(pack('H*', sha1(uniqid(mt_rand(), true))));
+        $headers = [
+            "GET /websockets/v3?app_id={$appId} HTTP/1.1",
+            "Host: {$host}",
+            "Upgrade: websocket",
+            "Connection: Upgrade",
+            "Sec-WebSocket-Key: {$key}",
+            "Sec-WebSocket-Version: 13"
+        ];
+        
+        $handshake = implode("\r\n", $headers) . "\r\n\r\n";
+        fwrite($socket, $handshake);
+        
+        $response = fread($socket, 2048);
+        
+        if (strpos($response, '101 Switching Protocols') === false) {
+            throw new Exception("WebSocket handshake failed");
+        }
+        
+        // Authorize
+        $authMessage = json_encode([
+            "authorize" => $token,
+            "req_id" => 1
+        ]);
+        
+        $this->sendWebSocketMessage($socket, $authMessage);
+        $authResponse = $this->readWebSocketMessage($socket);
+        $authData = json_decode($authResponse, true);
+        
+        if (isset($authData['error'])) {
+            throw new Exception("Authorization failed: " . $authData['error']['message']);
+        }
+        
+        // Transfer
+        $transferMessage = json_encode([
+            "paymentagent_transfer" => 1,
+            "amount" => $amount,
+            "currency" => $currency,
+            "transfer_to" => $transferTo,
+            "description" => $description,
+            "req_id" => $requestId
+        ]);
+        
+        $this->sendWebSocketMessage($socket, $transferMessage);
+        $transferResponse = $this->readWebSocketMessage($socket);
+        $transferData = json_decode($transferResponse, true);
+        
+        fclose($socket);
+        
+        if (isset($transferData['error'])) {
+            throw new Exception("Transfer failed: " . $transferData['error']['message']);
+        }
+        
+        return [
+            'success' => true,
+            'transaction_id' => $transferData['transaction_id'],
+            'client_to_full_name' => $transferData['client_to_full_name'],
+            'client_to_loginid' => $transferData['client_to_loginid'],
+            'paymentagent_transfer' => $transferData['paymentagent_transfer']
+        ];
+        
+    } catch (Exception $e) {
+        return [
+            'success' => false,
+            'error' => $e->getMessage()
+        ];
+    }
+}
+
+private function sendWebSocketMessage($socket, $message)
+{
+    $length = strlen($message);
+    $header = chr(0x81); // FIN + text frame
+    
+    if ($length < 126) {
+        $header .= chr($length);
+    } elseif ($length < 65536) {
+        $header .= chr(126) . pack('n', $length);
+    } else {
+        $header .= chr(127) . pack('NN', 0, $length);
+    }
+    
+    fwrite($socket, $header . $message);
+}
+
+private function readWebSocketMessage($socket)
+{
+    $header = fread($socket, 2);
+    if (strlen($header) != 2) {
+        throw new Exception("Failed to read WebSocket header");
+    }
+    
+    $payloadLength = ord($header[1]) & 127;
+    
+    if ($payloadLength == 126) {
+        $payloadLength = unpack('n', fread($socket, 2))[1];
+    } elseif ($payloadLength == 127) {
+        $payloadLength = unpack('N', fread($socket, 8))[1];
+    }
+    
+    return fread($socket, $payloadLength);
+}
 
 
 
