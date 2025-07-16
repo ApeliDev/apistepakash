@@ -458,19 +458,11 @@ class Main extends CI_Controller {
                 
     
                 if($save === TRUE && $save_customer_ledger === TRUE && $save_system_ledger === TRUE) {
-                    
                     $message = 'Txn ID: ' . $this->transaction_number . ', a deposit of ' . $amountUSD . ' USD is currently being processed.';
-                    
-                
                     $samphone =     '0703416091';
-
                     $sendadminsms0 = $this->Operations->sendSMS($samphone,$message);
-                    
-
                     //SEND USER APP NOTIFICATION 
                     $sms = $this->Operations->sendSMS($phone, $message);
-                  
-    
                     $response['status'] = 'success';
                     $response['message'] = $message;
                     $response['data'] = null;
@@ -484,9 +476,6 @@ class Main extends CI_Controller {
             }
             
         }
-    
-
-    
         echo json_encode($response);
     
     }
