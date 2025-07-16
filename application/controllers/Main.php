@@ -1,6 +1,5 @@
 <?php
 defined('BASEPATH') OR exit('No direct script access allowed');
-require_once __DIR__ . '/vendor/autoload.php';
 use WebSocket\Client;
 class Main extends CI_Controller {
     
