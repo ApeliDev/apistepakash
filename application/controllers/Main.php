@@ -774,24 +774,17 @@ class Main extends CI_Controller {
 
     public function checkAgentBalance()
     {
-        $appId = 76420; 
+        $appId = 76420;
         $endpoint = 'ws.binaryws.com';
         $url = "wss://{$endpoint}/websockets/v3?app_id={$appId}";
-        $token = 'DidPRclTKE0WYtT'; 
+        $token = 'DidPRclTKE0WYtT';
         
         try {
-            // Create WebSocket connection
-            $context = stream_context_create([
-                'http' => [
-                    'timeout' => 10
-                ]
+            // Use the WebSocket Client that's already imported
+            $client = new \WebSocket\Client($url, [
+                'timeout' => 10,
+                'headers' => []
             ]);
-            
-            $socket = stream_socket_client($url, $errno, $errstr, 10, STREAM_CLIENT_CONNECT, $context);
-            
-            if (!$socket) {
-                throw new Exception("WebSocket connection failed: $errstr ($errno)");
-            }
             
             // Send authorization request
             $authRequest = json_encode([
@@ -799,8 +792,8 @@ class Main extends CI_Controller {
                 "req_id" => 1
             ]);
             
-            fwrite($socket, $authRequest . "\n");
-            $authResponse = fgets($socket);
+            $client->send($authRequest);
+            $authResponse = $client->receive();
             $authData = json_decode($authResponse, true);
             
             if (isset($authData['error'])) {
@@ -813,11 +806,11 @@ class Main extends CI_Controller {
                 "req_id" => 2
             ]);
             
-            fwrite($socket, $balanceRequest . "\n");
-            $balanceResponse = fgets($socket);
+            $client->send($balanceRequest);
+            $balanceResponse = $client->receive();
             $balanceData = json_decode($balanceResponse, true);
             
-            fclose($socket);
+            $client->close();
             
             if (isset($balanceData['error'])) {
                 throw new Exception("Balance check failed: " . $balanceData['error']['message']);
@@ -839,23 +832,16 @@ class Main extends CI_Controller {
 
     public function performDerivTransfer($amount, $currency, $transferTo, $description, $requestId)
     {
-        $appId = 76420; 
+        $appId = 76420;
         $endpoint = 'ws.binaryws.com';
         $url = "wss://{$endpoint}/websockets/v3?app_id={$appId}";
         $token = 'DidPRclTKE0WYtT';
         
         try {
-            $context = stream_context_create([
-                'http' => [
-                    'timeout' => 10
-                ]
+            $client = new \WebSocket\Client($url, [
+                'timeout' => 15,
+                'headers' => []
             ]);
-            
-            $socket = stream_socket_client($url, $errno, $errstr, 10, STREAM_CLIENT_CONNECT, $context);
-            
-            if (!$socket) {
-                throw new Exception("WebSocket connection failed: $errstr ($errno)");
-            }
             
             // Send authorization request
             $authRequest = json_encode([
@@ -863,8 +849,8 @@ class Main extends CI_Controller {
                 "req_id" => 1
             ]);
             
-            fwrite($socket, $authRequest . "\n");
-            $authResponse = fgets($socket);
+            $client->send($authRequest);
+            $authResponse = $client->receive();
             $authData = json_decode($authResponse, true);
             
             if (isset($authData['error'])) {
@@ -881,11 +867,11 @@ class Main extends CI_Controller {
                 "req_id" => $requestId
             ]);
             
-            fwrite($socket, $transferRequest . "\n");
-            $transferResponse = fgets($socket);
+            $client->send($transferRequest);
+            $transferResponse = $client->receive();
             $transferData = json_decode($transferResponse, true);
             
-            fclose($socket);
+            $client->close();
             
             if (isset($transferData['error'])) {
                 throw new Exception("Transfer failed: " . $transferData['error']['message']);
@@ -893,9 +879,9 @@ class Main extends CI_Controller {
             
             return [
                 'success' => true,
-                'transaction_id' => $transferData['transaction_id'],
-                'client_to_full_name' => $transferData['client_to_full_name'],
-                'client_to_loginid' => $transferData['client_to_loginid'],
+                'transaction_id' => $transferData['paymentagent_transfer']['transaction_id'],
+                'client_to_full_name' => $transferData['paymentagent_transfer']['client_to_full_name'],
+                'client_to_loginid' => $transferData['paymentagent_transfer']['client_to_loginid'],
                 'paymentagent_transfer' => $transferData['paymentagent_transfer']
             ];
             
