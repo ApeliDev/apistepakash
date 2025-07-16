@@ -509,7 +509,32 @@ class Operations extends CI_model
 
    }
 
-   
+
+   public function MpesaWithdrawals()
+
+   {
+
+        $condition = array('paid'=>1);
+
+        $this->db->select('*');
+
+        $this->db->from('mpesa_withdrawals');
+
+        $this->db->where($condition);
+
+        $this->db->order_by('id  DESC');
+        $this->db->order_by('request_date DESC');
+        $query = $this->db->get();
+        if($query->num_rows() != 0)
+        {
+            return $query->result_array();
+        }
+        else
+        {
+            return false;
+        }
+
+   }
 
    public function SearchCustomers()
    {
@@ -1391,130 +1416,16 @@ class Operations extends CI_model
 
     }
 
-    
-
-    //public function sendSMS($mobile,$message)
-
-    // {  
-
-    //     $phone = preg_replace('/^(?:\+?254|0)?/','+254', $mobile);
-
-        
-
-    //     	$username = "samsonmunene";
-
-    //     // $password = "Sam200010";
-
-    //     $password = " bMBfkuA`xkZB8jLk";
-
-    //      try {
-
-    //     $xml_request = '
-
-    //     <SMS>
-
-    //         <authentication>
-
-    //             <username>'.$username.'</username>
-
-    //             <password>'.$password.'</password>
-
-    //         </authentication>
-
-    //         <message>
-
-    //             <sender>TAIFABIZ</sender>
-
-    //             <text>' . $message . '. </text>
-
-    //             <recipients>
-
-    //                 <gsm>' . $phone . '</gsm>
-
-    //             </recipients>
-
-    //         </message>
-
-    //     </SMS>
-
-    //     ';
-
-    //     $url = 'http://54.247.191.102/api/v3/sendsms/xml';
-
-    //     $ch = curl_init();
-
-    //     curl_setopt($ch, CURLOPT_URL, $url);
-
-    //     curl_setopt($ch, CURLOPT_POST, true);
-
-    //     curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: applicatio/xml;Accept: */*'));
-
-    //     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-
-    //     curl_setopt($ch, CURLOPT_POSTFIELDS, $xml_request);
-
-    //     $result = curl_exec($ch);
-
-    //     curl_close($ch);
-
-
-
-    //     if($result > 0)
-
-    //     {
-
-    //        $data = array(
-
-	// 		'receiver' => $mobile,
-
-	// 		'message' => $message,
-
-	// 		'created_on' => date('Y-m-d H:i:s'),
-
-    // 		);
-
-    // 	   $this->db->insert('outbox', $data);
-
-
-
-    //     }
-
-
-
-      
-
-    //     return $result;
-
-    // } catch(Exception $e) {
-
-    //     echo('Message: ' .$e->getMessage());
-
-    // }
-
-
-
-       
-
-    // }
-
-
 
   public function RecordAction($action)
 
   {
-
 	  $wallet_id = '';
-
 	  $phone = '';
-
 	  $data = array(
-
 		 'wallet_id' =>$wallet_id,
-
 		 'phone' =>$phone,
-
 		 'action' => $action,
-
 		 'created_on'=> date('Y-m-d H:i:s')
 
 	  );
