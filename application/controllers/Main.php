@@ -1,7 +1,7 @@
 <?php
 defined('BASEPATH') OR exit('No direct script access allowed');
+require_once __DIR__ . '/vendor/autoload.php';
 use WebSocket\Client;
-use WebSocket\ConnectionException;
 class Main extends CI_Controller {
     
     private $transaction_id;
