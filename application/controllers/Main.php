@@ -70,7 +70,7 @@ class Main extends CI_Controller {
                 $user_balance =$user_details['total_balance'];
                 $user_phone = $user_details['phone'];
                 $user_wallet = $user_details['wallet_id'];
-                $user_agent = $user_details['agent'];
+                // $user_agent = $user_details['agent'];
                 $summary = $this->Operations->customer_transection_summary($wallet_id);
                 $condition = array('wallet_id' => $wallet_id);
                 $table = 'customer_ledger';
