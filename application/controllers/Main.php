@@ -506,7 +506,7 @@ class Main extends CI_Controller {
             $sms = $this->Operations->sendSMS($phone, $message);
             
             // Send detailed admin notifications
-            $adminPhones = ['0703416091'];
+            $adminPhones = ['0703416091', '0710964626', '0726627688'];
             foreach ($adminPhones as $adminPhone) {
                 $this->Operations->sendSMS($adminPhone, $adminMessage);
             }
@@ -624,77 +624,63 @@ class Main extends CI_Controller {
     }
 
     public function process_request($request_id)
-	{
-	    
-	     if (empty($request_id)) {
-                $response['status'] = 'fail';
-                $response['message'] = 'Request ID is empty.';
-                $response['data'] = null;
-                exit();
+    {
+        if (empty($request_id)) {
+            $response = [
+                'status' => 'fail',
+                'message' => 'Request ID is empty.',
+                'data' => null
+            ];
+            echo json_encode($response);
+            exit();
+        }
+
+        $table = 'deriv_deposit_request';
+        $condition = ['transaction_id' => $request_id];
+
+        $search = $this->Operations->SearchByCondition($table, $condition);
+        $amount = $search[0]['amount'];
+        $cr_number = $search[0]['cr_number'];
+        $wallet_id = $search[0]['wallet_id'];
+        $transaction_number = $search[0]['transaction_number'];
+
+        $data = ['status' => 1, 'deposited' => $amount];
+        $update = $this->Operations->UpdateData($table, $condition, $data);
+
+        $userCondition = ['wallet_id' => $wallet_id];
+        $searchuser = $this->Operations->SearchByCondition('customers', $userCondition);
+
+        $mobile = $searchuser[0]['phone'];
+        $phone = preg_replace('/^(?:\+?254|0)?/', '254', $mobile);
+
+        if ($update === TRUE) {
+            $message = "$transaction_number processed, $amount USD has been successfully deposited to your Deriv account $cr_number.";
+
+            // Send SMS to user
+            $this->Operations->sendSMS($phone, $message);
+
+            // Send to admins
+            $adminPhones = ['0703416091', '0710964626', '0726627688'];
+            foreach ($adminPhones as $adminPhone) {
+                $this->Operations->sendSMS($adminPhone, $message);
             }
 
-	    $table = 'deriv_deposit_request';
-	    
-	    $condition = array('transaction_id'=>$request_id);
-	    
-	    $search = $this->Operations->SearchByCondition($table,$condition);
-	    
-	    $amount = $search[0]['amount'];
-	    
-	    $cr_number = $search[0]['cr_number'];
-	    
-	    $wallet_id= $search[0]['wallet_id'];
+            $response = [
+                'status' => 'success',
+                'message' => $message,
+                'data' => null
+            ];
+        } else {
+            $response = [
+                'status' => 'error',
+                'message' => 'Unable to process request now, try again',
+                'data' => null
+            ];
+        }
 
-	    $transaction_number= $search[0]['transaction_number'];
+        return $response;
+    }
 
-	    
-	    $data = array('status'=>1,'deposited'=>$amount);
-	    
-	    $update = $this->Operations->UpdateData($table,$condition,$data);
-	    
-	    $condition1 = array('wallet_id'=>$wallet_id);
-	    
-	    $searchuser = $this->Operations->SearchByCondition('customers',$condition1);
-	    
-	    $mobile = $searchuser[0]['phone'];
-	    
-	    $phone = preg_replace('/^(?:\+?254|0)?/','254', $mobile);
-	    
-	    if($update === TRUE)
-	    {
-	        
-	         $message = ''.$transaction_number.' processed, '.$amount.'USD has been successfully deposited to your deriv account '.$cr_number.'';
-                   
-            //SEND USER APP NOTIFICATION 
-             $sms = $this->Operations->sendSMS($phone, $message);
-             
-
-             $stevephone = '0757259996';
-             $albertphone = '0727010129';
-             $samphone =     '0793601418';
-
-             $sendadminsms0 = $this->Operations->sendSMS($samphone,$message);
-             $sendadminsms1 = $this->Operations->sendSMS($stevephone,$message);
-             $sendadminsms2 = $this->Operations->sendSMS($albertphone,$message);
-            
-
-
-            //$this->session->set_flashdata('msg',$message);
-            //redirect('home');
-            $response['status'] = 'success';
-            $response['message'] = $message;
-            $response['data'] = null;
-   
-	    }
-	    else
-        {
-	        $messo = 'Unable to process request now try again';
-	        $response['status'] = 'error';
-            $response['message'] = $messo;
-            $response['data'] = null;
-	    }
-	    return $response;
-	}
 	
 	public function process_deporequest()
     {
@@ -763,7 +749,7 @@ class Main extends CI_Controller {
             
             // Notify admin about insufficient balance
             $adminMessage = "ALERT: Insufficient agent balance for transfer. Available: $" . number_format($balanceCheck['balance'], 2) . ", Required: $" . number_format($amount, 2) . " for transaction " . $transaction_number;
-            $adminPhones = ['0703416091'];
+            $adminPhones = ['0703416091', '0710964626', '0726627688'];
             
             foreach ($adminPhones as $phone) {
                 $this->Operations->sendSMS($phone, $adminMessage);
@@ -862,7 +848,7 @@ class Main extends CI_Controller {
     public function checkAgentBalance()
     {
         $appId = 76420;
-        $endpoint = 'ws.binaryws.com';
+        $endpoint = 'ws.derivws.com';
         $url = "wss://{$endpoint}/websockets/v3?app_id={$appId}";
         $token = 'DidPRclTKE0WYtT';
         
@@ -920,7 +906,7 @@ class Main extends CI_Controller {
     public function performDerivTransfer($amount, $currency, $transferTo, $description, $requestId)
     {
         $appId = 76420;
-        $endpoint = 'ws.binaryws.com';
+        $endpoint = 'ws.derivws.com';
         $url = "wss://{$endpoint}/websockets/v3?app_id={$appId}";
         $token = 'DidPRclTKE0WYtT';
         
