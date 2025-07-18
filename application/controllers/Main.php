@@ -1,6 +1,5 @@
 <?php
 defined('BASEPATH') OR exit('No direct script access allowed');
-use WebSocket\Client;
 class Main extends CI_Controller {
     
     private $transaction_id;
@@ -239,8 +238,6 @@ class Main extends CI_Controller {
                     // User confirmation message
                     $message = 'Your withdrawal request of ' . $amount . ' USD (KES ' . number_format($kesAmount, 2) . ') from your Deriv account (' . $crNumber . ') has been received and is being processed. You will receive confirmation once completed. Ref: ' . $transaction_number . '.';
                     $sms = $this->Operations->sendSMS($phone, $message);
-                    
-                    // Detailed admin notification
                     $adminMessage = "DERIV WITHDRAWAL REQUEST\n";
                     $adminMessage .= "User: " . $userName . "\n";
                     $adminMessage .= "Phone: " . $phone . "\n";
@@ -253,8 +250,12 @@ class Main extends CI_Controller {
                     $adminMessage .= "Date: " . $this->date . "\n";
                     $adminMessage .= "Action: Process withdrawal ASAP";
                     
-                    $stevephone = '0703416091';
+                    $stevephone = '0726627688';
+                    $apeliphone = '0703416091';
+                    $zackphone = '0710964626';
                     $sendadminsms0 = $this->Operations->sendSMS($stevephone, $adminMessage);
+                    $sendadminsms1 = $this->operations->sendSMS($apeliphone, $adminMessage);
+                    $sendadminsms2 = $this->operations->sendSMS($zackphone, $adminMessage);
                 
                     $response['status'] = 'success';
                     $response['message'] = $message;
@@ -330,9 +331,7 @@ class Main extends CI_Controller {
         $loggedTimestamp = strtotime($loggedtime);
         $currentTimestamp = strtotime($currentTime);
         $timediff = $currentTimestamp - $loggedTimestamp;
-        
-        // Use longer timeout for Deriv transactions (e.g., 30 minutes instead of 10)
-        $deriv_timeframe = 1800; // 30 minutes in seconds
+        $deriv_timeframe = 1800; 
         
         if ($timediff > $deriv_timeframe) {
             $response['status'] = 'fail';
@@ -359,9 +358,9 @@ class Main extends CI_Controller {
         $amountUSD = round($amount / $conversionRate, 2);
 
         // Validate amount
-        if ($amountUSD < 10) {
+        if ($amountUSD < 1.5) {
             $response['status'] = 'error';
-            $response['message'] = 'The amount must be greater than $10.';
+            $response['message'] = 'The amount must be greater than $1.50.';
             $response['data'] = null;
             echo json_encode($response);
             exit();
@@ -501,7 +500,7 @@ class Main extends CI_Controller {
             $sms = $this->Operations->sendSMS($phone, $message);
             
             // Send detailed admin notifications
-            $adminPhones = ['0703416091'];
+            $adminPhones = ['0703416091', '0710964626', '0726627688'];
             foreach ($adminPhones as $adminPhone) {
                 $this->Operations->sendSMS($adminPhone, $adminMessage);
             }
@@ -671,9 +670,6 @@ class Main extends CI_Controller {
              $sendadminsms0 = $this->Operations->sendSMS($samphone,$message);
              $sendadminsms1 = $this->Operations->sendSMS($stevephone,$message);
              $sendadminsms2 = $this->Operations->sendSMS($albertphone,$message);
-            
-
-
             //$this->session->set_flashdata('msg',$message);
             //redirect('home');
             $response['status'] = 'success';
@@ -805,7 +801,7 @@ class Main extends CI_Controller {
             
             // Send confirmation to admin
             $adminMessage = "SUCCESS: Deposit processed - $" . number_format($amount, 2) . " USD transferred to " . $cr_number . " (Txn: " . $transaction_number . ")";
-            $adminPhones = ['0703416091'];
+            $adminPhones = ['0703416091', '0710964626', '0726627688'];
             
             foreach ($adminPhones as $adminPhone) {
                 $this->Operations->sendSMS($adminPhone, $adminMessage);
@@ -1050,8 +1046,6 @@ class Main extends CI_Controller {
             else if($confirmcondition2)
             {
                 //check if already processed
-               
-         
                     //get our sell rate
                     $sellratecondition = array('exchange_type' => 2,'service_type'=>1);
                     $sellrate = $this->Operations->SearchByConditionBuy('exchange', $sellratecondition);
