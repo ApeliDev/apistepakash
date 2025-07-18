@@ -1,13 +1,9 @@
 <?php
-defined('BASEPATH') or exit('No direct script access allowed');
+defined('BASEPATH') OR exit('No direct script access allowed');
 
-use WebSocket\Client;
-use WebSocket\ConnectionException;
-
-class Deriv extends CI_Controller
-{
-    private $currentDateTime;
+class Deriv extends CI_Controller {
     private $date;
+    private $currentDateTime;
 
     public function __construct()
     {
@@ -15,372 +11,223 @@ class Deriv extends CI_Controller
         $this->load->model('Operations');
         $this->currentDateTime = new DateTime('now', new DateTimeZone('Africa/Nairobi'));
         $this->date = $this->currentDateTime->format('Y-m-d H:i:s');
-
-        header('Content-Type: application/json');
-        header("Access-Control-Allow-Origin: *");
-        header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-        header('Access-Control-Allow-Headers: Content-Type');
-        header('Access-Control-Max-Age: 86400');
     }
 
     /**
-     * Handle Deriv deposits without session checks
+     * Handle Deriv deposit callback
      */
-    public function deposit()
+    public function deposit_callback()
     {
-        $response = array();
-
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        // Get the raw callback data
+        $callbackData = file_get_contents('php://input');
+        
+        // Log the raw callback for debugging
+        $logFile = "deriv/deposit_callback_" . date('Y-m-d_H-i-s') . ".txt";
+        file_put_contents($logFile, $callbackData);
+        
+        // Decode the JSON data
+        $decode = json_decode($callbackData, true);
+        
+        // Check if JSON decoding was successful
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            file_put_contents("deriv/error_" . date('Y-m-d_H-i-s') . ".txt", 
+                "JSON decode error: " . json_last_error_msg() . "\nRaw data: " . $callbackData);
             http_response_code(400);
-            $response['status'] = 'fail';
-            $response['message'] = 'Only POST request allowed';
-            echo json_encode($response);
-            exit();
+            echo json_encode(['ResultCode' => 1, 'ResultDesc' => 'Invalid JSON']);
+            return;
         }
-
-        // Fetch and sanitize inputs
-        $crNumber = trim(str_replace(' ', '', $this->input->post('crNumber')));
-        $amount = (float)$this->input->post('amount');
-        $wallet_id = $this->input->post('wallet_id');
-        $transaction_id = $this->input->post('transaction_id');
-        $transaction_number = $this->input->post('transaction_number');
-
-        // Form validation
-        $this->form_validation->set_rules('crNumber', 'CR Number', 'required|min_length[8]|max_length[12]');
-        $this->form_validation->set_rules('amount', 'Amount', 'required|numeric|greater_than[0]');
-        $this->form_validation->set_rules('wallet_id', 'Wallet ID', 'required');
-        $this->form_validation->set_rules('transaction_id', 'Transaction ID', 'required');
-        $this->form_validation->set_rules('transaction_number', 'Transaction Number', 'required');
-
-        if ($this->form_validation->run() == FALSE) {
-            $response['status'] = 'fail';
-            $response['message'] = validation_errors();
-            $response['data'] = null;
-            echo json_encode($response);
-            exit();
+        
+        // Log the decoded data for debugging
+        file_put_contents("deriv/decoded_" . date('Y-m-d_H-i-s') . ".txt", 
+            print_r($decode, true));
+        
+        // Check if this is a paymentagent_transfer callback
+        if (!isset($decode['paymentagent_transfer'])) {
+            file_put_contents("deriv/structure_error_" . date('Y-m-d_H-i-s') . ".txt", 
+                "Missing paymentagent_transfer structure\nDecoded data: " . print_r($decode, true));
+            http_response_code(400);
+            echo json_encode(['ResultCode' => 1, 'ResultDesc' => 'Invalid callback structure']);
+            return;
         }
-
-        // Get exchange rate
-        $buyratecondition = array('exchange_type' => 1, 'service_type' => 1);
-        $buyrate = $this->Operations->SearchByConditionBuy('exchange', $buyratecondition);
-
-        if (empty($buyrate)) {
-            $response['status'] = 'error';
-            $response['message'] = 'Exchange rate not available. Please try again later.';
-            $response['data'] = null;
-            echo json_encode($response);
-            exit();
-        }
-
-        $conversionRate = $buyrate[0]['kes'];
-        $boughtbuy = $buyrate[0]['bought_at'];
-        $amountUSD = round($amount / $conversionRate, 2);
-
-        // Validate minimum amount
-        if ($amountUSD < 2.5) {
-            $response['status'] = 'error';
-            $response['message'] = 'The minimum deposit amount is $2.50 USD.';
-            $response['data'] = null;
-            echo json_encode($response);
-            exit();
-        }
-
-        // Check for duplicate transactions
-        $duplicate_check = $this->Operations->SearchByCondition(
-            'deriv_deposit_request',
-            array('transaction_id' => $transaction_id, 'status' => 1)
-        );
-
-        if (!empty($duplicate_check)) {
-            $response['status'] = 'error';
-            $response['message'] = 'Transaction already processed.';
-            $response['data'] = null;
-            echo json_encode($response);
-            exit();
-        }
-
-        // ATTEMPT DERIV TRANSFER
-        $transferResult = $this->transferToDerivAccount($crNumber, $amountUSD);
-
-        if (!$transferResult['success']) {
-            // If transfer failed due to insufficient agent balance, notify admin
-            if (strpos($transferResult['message'], 'Insufficient payment agent balance') !== false) {
-                $this->Operations->sendSMS('0703416091', "CRITICAL: Deriv agent balance low. Needed: $" . $amountUSD);
-                
-                // Still save the request as pending
-                $this->savePendingDeposit($wallet_id, $transaction_id, $transaction_number, $crNumber, $amountUSD, $conversionRate, $boughtbuy);
-                
-                $response['status'] = 'processing';
-                $response['message'] = 'Transaction is being processed. You will receive a confirmation once completed.';
-                $response['data'] = null;
-            } else {
-                $response['status'] = 'error';
-                $response['message'] = $transferResult['message'];
-                $response['data'] = null;
-            }
-            echo json_encode($response);
-            exit();
-        }
-
-        // If transfer successful, complete the transaction
-        $this->completeDeposit($wallet_id, $transaction_id, $transaction_number, $crNumber, $amount, $amountUSD, $conversionRate, $boughtbuy);
-
-        $user = $this->Operations->SearchByCondition('customers', array('wallet_id' => $wallet_id));
-        $phone = $user[0]['phone'];
-
-        $message = 'Txn ID: ' . $transaction_number . ', deposit of $' . $amountUSD . ' USD successfully completed to Deriv account ' . $crNumber;
-        $this->Operations->sendSMS($phone, $message);
-        $this->Operations->sendSMS('0703416091', "Deposit completed: $" . $amountUSD . " USD to " . $crNumber);
-
-        $response['status'] = 'success';
-        $response['message'] = $message;
-        $response['data'] = $transferResult['data'];
-
-        echo json_encode($response);
+        
+        $transferData = $decode['paymentagent_transfer'];
+        
+        // Process the successful transfer
+        $this->processDerivDeposit($transferData);
+        
+        // Respond to Deriv with success
+        echo json_encode(['ResultCode' => 0, 'ResultDesc' => 'Callback processed successfully']);
     }
 
     /**
-     * Save pending deposit when agent balance is insufficient
+     * Process successful Deriv deposit
      */
-    private function savePendingDeposit($wallet_id, $transaction_id, $transaction_number, $crNumber, $amountUSD, $conversionRate, $boughtbuy)
-    {
-        $deposit_data = array(
-            'transaction_id' => $transaction_id,
-            'transaction_number' => $transaction_number,
-            'wallet_id' => $wallet_id,
-            'cr_number' => $crNumber,
-            'amount' => $amountUSD,
-            'rate' => $conversionRate,
-            'status' => 0, // 0 = pending
-            'deposited' => 0,
-            'bought_at' => $boughtbuy,
-            'request_date' => $this->date
-        );
-        $this->Operations->Create('deriv_deposit_request', $deposit_data);
-    }
-
-    /**
-     * Complete deposit transaction
-     */
-    private function completeDeposit($wallet_id, $transaction_id, $transaction_number, $crNumber, $amount, $amountUSD, $conversionRate, $boughtbuy)
-    {
-        $this->db->trans_start();
-
-        // Save to deriv_deposit_request
-        $deposit_data = array(
-            'transaction_id' => $transaction_id,
-            'transaction_number' => $transaction_number,
-            'wallet_id' => $wallet_id,
-            'cr_number' => $crNumber,
-            'amount' => $amountUSD,
-            'rate' => $conversionRate,
-            'status' => 1, // 1 = completed
-            'deposited' => $amountUSD,
-            'bought_at' => $boughtbuy,
-            'request_date' => $this->date,
-            'processed_at' => $this->date
-        );
-        $this->Operations->Create('deriv_deposit_request', $deposit_data);
-
-        $mycharge = ($conversionRate - $boughtbuy);
-        $newcharge = (float)$mycharge * $amountUSD;
-
-        // Create customer ledger entry
-        $customer_ledger_data = array(
-            'transaction_id' => $transaction_id,
-            'transaction_number' => $transaction_number,
-            'description' => 'Deposit to Deriv',
-            'pay_method' => 'STEPAKASH',
-            'wallet_id' => $wallet_id,
-            'paid_amount' => $amount,
-            'cr_dr' => 'dr',
-            'deriv' => 1,
-            'trans_date' => $this->date,
-            'currency' => 'USD',
-            'amount' => $amountUSD,
-            'rate' => $conversionRate,
-            'chargePercent' => 0,
-            'charge' => $newcharge,
-            'total_amount' => $amount,
-            'status' => 1,
-            'created_at' => $this->date,
-        );
-        $this->Operations->Create('customer_ledger', $customer_ledger_data);
-
-        // Create system ledger entry
-        $system_ledger_data = array(
-            'transaction_id' => $transaction_id,
-            'transaction_number' => $transaction_number,
-            'description' => 'Deposit to Deriv',
-            'pay_method' => 'STEPAKASH',
-            'wallet_id' => $wallet_id,
-            'paid_amount' => $amount,
-            'cr_dr' => 'dr',
-            'deriv' => 1,
-            'trans_date' => $this->date,
-            'currency' => 'USD',
-            'amount' => $amountUSD,
-            'rate' => $conversionRate,
-            'chargePercent' => 0,
-            'charge' => $newcharge,
-            'total_amount' => $amount,
-            'status' => 1,
-            'created_at' => $this->date,
-        );
-        $this->Operations->Create('system_ledger', $system_ledger_data);
-
-        $this->db->trans_complete();
-    }
-
-    /**
-     * Function to transfer funds to Deriv account
-     */
-    private function transferToDerivAccount($loginid, $amount)
+    private function processDerivDeposit($transferData)
     {
         try {
-            $appId = 76420;
-            $url = "wss://ws.derivws.com/websockets/v3?app_id={$appId}";
-            $token = 'DidPRclTKE0WYtT';
-
-            $context = stream_context_create([
-                'ssl' => [
-                    'verify_peer' => false,
-                    'verify_peer_name' => false,
-                ],
-            ]);
-
-            $client = new Client($url, [
-                'timeout' => 30,
-                'headers' => [
-                    'Content-Type' => 'application/json'
-                ]
-            ], ['context' => $context]);
-
-            // 1. Authorize with Payment Agent token
-            $client->send(json_encode(["authorize" => $token]));
-            $authResponse = $client->receive();
-            $authData = json_decode($authResponse, true);
-
-            if (isset($authData['error'])) {
-                $this->logError('Auth failed: ' . $authData['error']['message']);
-                return [
-                    'success' => false,
-                    'message' => 'Authorization failed: ' . $authData['error']['message'],
-                    'data' => null
-                ];
+            $transaction_id = $transferData['transaction_id'] ?? null;
+            $amount = $transferData['amount'] ?? null;
+            $currency = $transferData['currency'] ?? 'USD';
+            $client_to_loginid = $transferData['client_to_loginid'] ?? null; // CR number
+            $client_to_full_name = $transferData['client_to_full_name'] ?? null;
+            
+            // Validate required fields
+            if (empty($transaction_id) || empty($amount) || empty($client_to_loginid)) {
+                file_put_contents("deriv/validation_error_" . date('Y-m-d_H-i-s') . ".txt", 
+                    "Validation failed - TransactionID: $transaction_id, Amount: $amount, CR: $client_to_loginid");
+                return;
             }
-
-            // 2. Validate payment agent balance
-            if (isset($authData['authorize']['balance']) && $authData['authorize']['balance'] < $amount) {
-                $this->logError('Insufficient payment agent balance');
-                return [
-                    'success' => false,
-                    'message' => 'Insufficient payment agent balance',
-                    'data' => null
-                ];
+            
+            // Find the deposit request
+            $condition = array('cr_number' => $client_to_loginid, 'status' => 0);
+            $depositRequest = $this->Operations->SearchByCondition('deriv_deposit_request', $condition);
+            
+            if (empty($depositRequest)) {
+                file_put_contents("deriv/not_found_" . date('Y-m-d_H-i-s') . ".txt", 
+                    "Deposit request not found for CR: $client_to_loginid");
+                return;
             }
-
-            // 3. Make the transfer
-            $transferRequest = [
-                "paymentagent_transfer" => 1,
-                "transfer_to" => $loginid,
-                "amount" => $amount,
-                "currency" => "USD",
-                "description" => "Deposit via Stepakash"
-            ];
-
-            $client->send(json_encode($transferRequest));
-            $transferResponse = $client->receive();
-            $transferData = json_decode($transferResponse, true);
-
-            $client->close();
-
-            if (isset($transferData['error'])) {
-                $this->logError('Transfer failed: ' . $transferData['error']['message']);
-                return [
-                    'success' => false,
-                    'message' => $transferData['error']['message'],
-                    'data' => $transferData
-                ];
+            
+            $request = $depositRequest[0];
+            $wallet_id = $request['wallet_id'];
+            $request_id = $request['transaction_id'];
+            
+            // Update the deposit request
+            $updateCondition = array('transaction_id' => $request_id);
+            $updateData = array(
+                'status' => 1,
+                'deposited' => $amount,
+                'deriv_transaction_id' => $transaction_id,
+                'processed_date' => $this->date,
+                'client_name' => $client_to_full_name
+            );
+            
+            $update = $this->Operations->UpdateData('deriv_deposit_request', $updateCondition, $updateData);
+            
+            if ($update === TRUE) {
+                // Get user details for notification
+                $userCondition = array('wallet_id' => $wallet_id);
+                $user = $this->Operations->SearchByCondition('customers', $userCondition);
+                
+                if (!empty($user)) {
+                    $phone = $user[0]['phone'];
+                    $customer_name = $user[0]['name'] ?? 'Customer';
+                    
+                    // Format message
+                    $formatted_amount = number_format($amount, 2);
+                    $message = "Hi $customer_name, your Deriv deposit of $formatted_amount $currency to account $client_to_loginid has been processed successfully. Transaction ID: $transaction_id";
+                    
+                    // Send SMS notification
+                    $this->Operations->sendSMS($phone, $message);
+                    
+                    // Also notify admin
+                    $adminMessage = "Deriv Deposit Success: $formatted_amount $currency to $client_to_loginid (Txn: $transaction_id)";
+                    $adminPhones = ['0703416091'];
+                    foreach ($adminPhones as $adminPhone) {
+                        $this->Operations->sendSMS($adminPhone, $adminMessage);
+                    }
+                }
+                
+                file_put_contents("deriv/success_" . date('Y-m-d_H-i-s') . ".txt", 
+                    "Successfully processed Deriv deposit:\n" .
+                    "Transaction ID: $transaction_id\n" .
+                    "Amount: $amount $currency\n" .
+                    "CR Number: $client_to_loginid\n" .
+                    "Wallet: $wallet_id");
+            } else {
+                file_put_contents("deriv/update_error_" . date('Y-m-d_H-i-s') . ".txt", 
+                    "Failed to update deposit record for Transaction ID: $transaction_id");
             }
-
-            if (isset($transferData['paymentagent_transfer']) && $transferData['paymentagent_transfer'] == 1) {
-                $this->logSuccess("Transfer successful to $loginid: $amount USD");
-                return [
-                    'success' => true,
-                    'message' => 'Transfer successful',
-                    'data' => $transferData
-                ];
-            }
-
-            return [
-                'success' => false,
-                'message' => 'Unexpected response from Deriv API',
-                'data' => $transferData
-            ];
         } catch (Exception $e) {
-            $this->logError('Connection error: ' . $e->getMessage());
-            return [
-                'success' => false,
-                'message' => 'Connection error: ' . $e->getMessage(),
-                'data' => null
-            ];
+            file_put_contents("deriv/exception_" . date('Y-m-d_H-i-s') . ".txt", 
+                "Exception processing Deriv deposit:\n" .
+                "Error: " . $e->getMessage() . "\n" .
+                "Trace: " . $e->getTraceAsString());
         }
     }
 
     /**
-     * Log error messages
+     * Handle Deriv transfer errors
      */
-    private function logError($message)
+    public function transfer_error()
     {
-        file_put_contents('deriv_errors.log', date('Y-m-d H:i:s') . " - " . $message . "\n", FILE_APPEND);
+        // Get the raw callback data
+        $callbackData = file_get_contents('php://input');
+        
+        // Log the raw callback for debugging
+        $logFile = "deriv/transfer_error_" . date('Y-m-d_H-i-s') . ".txt";
+        file_put_contents($logFile, $callbackData);
+        
+        // Decode the JSON data
+        $decode = json_decode($callbackData, true);
+        
+        // Check if this is an error callback
+        if (isset($decode['error'])) {
+            $error = $decode['error'];
+            $code = $error['code'] ?? 'UNKNOWN';
+            $message = $error['message'] ?? 'No error message';
+            
+            // Log the error
+            file_put_contents("deriv/error_log_" . date('Y-m-d_H-i-s') . ".txt", 
+                "Deriv Transfer Error:\nCode: $code\nMessage: $message");
+            
+            // You might want to look up the failed transaction and update its status
+            // This would depend on how you track pending transfers
+            
+            // Notify admin
+            $adminMessage = "Deriv Transfer Failed:\nCode: $code\nMessage: $message";
+            $adminPhones = ['0703416091'];
+            foreach ($adminPhones as $adminPhone) {
+                $this->Operations->sendSMS($adminPhone, $adminMessage);
+            }
+        }
+        
+        echo json_encode(['ResultCode' => 0, 'ResultDesc' => 'Error logged']);
     }
 
     /**
-     * Log success messages
+     * Handle Deriv balance updates (for agent balance monitoring)
      */
-    private function logSuccess($message)
+    public function balance_update()
     {
-        file_put_contents('deriv_success.log', date('Y-m-d H:i:s') . " - " . $message . "\n", FILE_APPEND);
-    }
-
-    /**
-     * Process callback from Deriv when deposit is complete
-     */
-    public function callback()
-    {
-        $json_data = file_get_contents('php://input');
-        $data = json_decode($json_data, true);
-
-        if (isset($data['paymentagent_transfer']) && $data['paymentagent_transfer'] == 1) {
-            $transaction_id = $data['req_id'] ?? '';
-            $amount = $data['amount'] ?? 0;
-            $loginid = $data['transfer_to'] ?? '';
-
-            if (!empty($transaction_id)) {
-                $table = 'deriv_deposit_request';
-                $condition = array('transaction_id' => $transaction_id);
-                $request = $this->Operations->SearchByCondition($table, $condition);
-
-                if (!empty($request)) {
-                    $updateData = array(
-                        'status' => 1,
-                        'deposited' => $amount,
-                        'processed_at' => $this->date
-                    );
-                    $this->Operations->UpdateData($table, $condition, $updateData);
-
-                    // Notify user
-                    $wallet_id = $request[0]['wallet_id'];
-                    $user = $this->Operations->SearchByCondition('customers', array('wallet_id' => $wallet_id));
-                    $phone = $user[0]['phone'];
-                    $message = "Your deposit of $amount USD to Deriv account $loginid is complete";
-                    $this->Operations->sendSMS($phone, $message);
+        // Get the raw callback data
+        $callbackData = file_get_contents('php://input');
+        
+        // Log the raw callback for debugging
+        $logFile = "deriv/balance_update_" . date('Y-m-d_H-i-s') . ".txt";
+        file_put_contents($logFile, $callbackData);
+        
+        // Decode the JSON data
+        $decode = json_decode($callbackData, true);
+        
+        if (isset($decode['balance'])) {
+            $balance = $decode['balance'];
+            $current_balance = $balance['balance'] ?? 0;
+            $currency = $balance['currency'] ?? 'USD';
+            
+            // Log the balance update
+            file_put_contents("deriv/balance_log_" . date('Y-m-d') . ".txt", 
+                date('H:i:s') . " - Balance: $current_balance $currency\n", 
+                FILE_APPEND);
+            
+            // You might want to store this in database for monitoring
+            $data = array(
+                'balance' => $current_balance,
+                'currency' => $currency,
+                'update_time' => $this->date
+            );
+            $this->Operations->Create('deriv_balance_log', $data);
+            
+            // Alert if balance is low
+            if ($current_balance < 1000) { // Example threshold
+                $adminMessage = "Deriv Balance Alert: $current_balance $currency (Low Balance)";
+                $adminPhones = ['0703416091'];
+                foreach ($adminPhones as $adminPhone) {
+                    $this->Operations->sendSMS($adminPhone, $adminMessage);
                 }
             }
         }
-
-        // Always return success to Deriv
-        echo json_encode(array('status' => 'success'));
+        
+        echo json_encode(['ResultCode' => 0, 'ResultDesc' => 'Balance update received']);
     }
 }

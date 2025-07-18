@@ -1087,23 +1087,11 @@ class Operations extends CI_model
 
 
 	public function resolve_user_login($phone, $password, $table) {
-
-		
-
 		$this->db->select('password');
-
 		$this->db->from($table);
-
 		$this->db->where('phone', $phone);
-
 		$hash = $this->db->get()->row('password');
-
-		
-
 		return $this->verify_password_hash($password, $hash);
-
-		
-
 	}
 
 
@@ -1113,18 +1101,11 @@ class Operations extends CI_model
 	public function resolve_admin_login($email,$password,$table)
 
 	{
-
 		$this->db->select('password');
-
 		$this->db->from($table);
-
 		$this->db->where('email', $email);
-
 		// $this->db->where('partner_id', $partner_id);
-
 		$hash = $this->db->get()->row('password');
-
-	
 		return $this->verify_password_hash($password, $hash);
 
 	}
@@ -1132,19 +1113,11 @@ class Operations extends CI_model
     public function resolve_super_admin_login($email,$password,$table)
 
 	{
-
 		$this->db->select('password');
-
 		$this->db->from($table);
-
 		$this->db->where('email', $email);
-
 		$this->db->where('status', 1);
-
-
 		$hash = $this->db->get()->row('password');
-
-	
 		return $this->verify_password_hash($password, $hash);
 
 	}
@@ -1612,10 +1585,10 @@ class Operations extends CI_model
 
     public function getLastWalletId() {
         $query = $this->db->select('wallet_id')
-                        ->order_by('id', 'DESC')
-                        ->limit(1)
-                        ->get('customers');
-        
+                            ->order_by('id', 'DESC')
+                            ->limit(1)
+                            ->get('customers');
+            // Check if the query returned any rows            
         if ($query->num_rows() > 0) {
             $row = $query->row();
             return $row->wallet_id;
@@ -1627,13 +1600,11 @@ class Operations extends CI_model
 
     public function auth_session($session_id,$currentTime,$timeframe)
    {
-
         if(empty($session_id))
         {
             $response['status'] = 'fail';
             $response['message'] = 'session_id required';
 			$response['response'] = 0;
-
         }
         else if(empty($currentTime))
         {
@@ -1652,19 +1623,12 @@ class Operations extends CI_model
         else
         {
             $session_table = 'login_session';
-
             $session_condition = array('session_id' => $session_id);
             $checksession = $this->SearchByCondition($session_table, $session_condition);
-            
             $loggedtime = $checksession[0]['created_on'];
-            // $currentTime = $this->date;
-
             $loggedTimestamp = strtotime($loggedtime);
             $currentTimestamp = strtotime($currentTime);
             $timediff = $currentTimestamp - $loggedTimestamp;
-        
-            // Check if the time difference is more than 1 minute (60 seconds)
-
             if (($timediff) >  $timeframe) {
                 $response['status'] = 'fail';
                 $response['message'] = 'User logged out';
@@ -1672,33 +1636,20 @@ class Operations extends CI_model
 
             }
             else if (!empty($checksession) && $checksession[0]['session_id'] == $session_id) {
-
                 $logged_wallet = $checksession[0]['wallet_id'];
                 $senderWalletID   = $logged_wallet;
                 $senderSummary = $this->customer_transection_summary($senderWalletID);
-                
                 $senderTotalCredit = (float) str_replace(',', '', number_format($senderSummary[0][0]['total_credit'], 2));
                 $senderTotalDebit = (float) str_replace(',', '', number_format($senderSummary[1][0]['total_debit'], 2));
                 $senderTotalBalanceKes = $senderTotalCredit - $senderTotalDebit;
-                $senderTotalBalanceKes = str_replace(',', '', number_format($senderTotalBalanceKes, 2));
-        
-                
+                $senderTotalBalanceKes = str_replace(',', '', number_format($senderTotalBalanceKes, 2));                
                 $condition1 = array('wallet_id'=>$senderWalletID);
-                
-                
                 $sender_details = $this->SearchByCondition('customers',$condition1);
-        
                 $user_transactions = $this->SearchByCondition('customer_ledger',$condition1);
-        
-            
                 $sender_phone =  $sender_details[0]['phone'];
                 $sender_wallet =  $sender_details[0]['wallet_id'];
                 $created_on =  $sender_details[0]['created_on'];
                 $account_number =  $sender_details[0]['account_number'];
-        
-        
-                
-
                 $user_response = array(
                     'wallet_id'=>$sender_wallet,
                     'phone'=>$sender_phone,
@@ -1709,32 +1660,22 @@ class Operations extends CI_model
                     'total_balance'=>$senderTotalBalanceKes,
                     'transactions'=>$user_transactions,
                 );
-
                 $response['status'] = 'success';
                 $response['message'] = 'User logged details';
                 $response['response'] = 1;
                 $response['data'] = $user_response;
-
-
-
             }
             else if (!empty($checksession) && $checksession[0]['session_id'] != $session_id) {
-
                 $response['status'] = 'error';
                 $response['message'] = 'Invalid Authentication';
                 $response['response'] = 0;
-
             }
         }
-
 		return $response;
-		
    }
 
-
-   public function partner_auth($token,$currentTime,$timeframe)
+    public function partner_auth($token,$currentTime,$timeframe)
    {
-
         if(empty($token))
         {
             $response['status'] = 'fail';
@@ -1755,94 +1696,60 @@ class Operations extends CI_model
         }
         else
         {
-         $session_table = 'admin_login_session';
-
+        $session_table = 'admin_login_session';
 		$session_condition = array('session_id' => $token);
 		$checksession = $this->SearchByCondition($session_table, $session_condition);
         $logged_session = $checksession[0]['session_id'];
-		
 		$loggedtime = $checksession[0]['created_on'];
-		// $currentTime = $this->date;
-
 		$loggedTimestamp = strtotime($loggedtime);
 		$currentTimestamp = $currentTime;
 		$timediff = $currentTimestamp - $loggedTimestamp;
-	
-		// Check if the time difference is more than 1 minute (60 seconds)
-
 		if (($timediff) >  $timeframe) {
 			$response['status'] = 'fail';
 			$response['message'] = 'token expired';
 		}
 		else if (!empty($checksession) &&  $logged_session == $token) {
-
 			$partners_id = $checksession[0]['partner_id'];
 			$user_id = $checksession[0]['user_id'];
-			
-
 			$user_response = array(
 				'partner_id'=>$partners_id,
 				'user_id'=>$user_id,
-                // 'loggedTimestamp'=>$loggedTimestamp,
-                // 'currentTimestamp'=>$currentTime,
-                // 'timediff'=>$timediff,
-                // 'timeframe'=>$timeframe,
 			 );
-
 			 $response['status'] = 'success';
 			 $response['message'] = 'valid token'; 
 			 $response['data'] = $user_response;
-
-
-
-
 		}
         else{
             $response['status'] = 'fail';
             $response['message'] = 'something went wrong'; 
-
         }
         }
-
-		return $response;
-		
+		return $response;	
    }
 
-
     public function UserAccount($user_wallet)
-   {
+    {
        $senderWalletID   = $user_wallet;
        $senderSummary = $this->customer_transection_summary($senderWalletID);
-        
        $senderTotalCredit = (float) str_replace(',', '', number_format($senderSummary[0][0]['total_credit'], 2));
        $senderTotalDebit = (float) str_replace(',', '', number_format($senderSummary[1][0]['total_debit'], 2));
        $senderTotalBalanceKes = $senderTotalCredit - $senderTotalDebit;
        $senderTotalBalanceKes = str_replace(',', '', number_format($senderTotalBalanceKes, 2));
-
-       
        $condition1 = array('wallet_id'=>$senderWalletID);
-       
        $sender_details = $this->SearchByCondition('customers',$condition1);
-
        if(empty($sender_details))
        {
             $response['status'] = 'error';
             $response['message'] = 'User not found';
             $response['user'] = 0;
-
        }
        else
        {
         $user_transactions = $this->SearchByCondition('customer_ledger',$condition1);
-        
         $sender_phone =  $sender_details[0]['phone'];
- 
         $sender_wallet =  $sender_details[0]['wallet_id'];
         $created_on =  $sender_details[0]['created_on'];
         $account_number =  $sender_details[0]['account_number'];
- 
- 
-        
         $response =  array(
             'wallet_id'=>$sender_wallet,
             'user'=>1,
@@ -1855,52 +1762,34 @@ class Operations extends CI_model
             'transactions'=>$user_transactions,
          );
        }
-
        return $response;
-
-      
-
    }
 
    public function AgentsAccount($agent_wallet)
    {
-       
        $senderWalletID   = $agent_wallet;
        $senderSummary = $this->customer_transection_summary($senderWalletID);
-        
        $senderTotalCredit = (float) str_replace(',', '', number_format($senderSummary[0][0]['total_credit'], 2));
        $senderTotalDebit = (float) str_replace(',', '', number_format($senderSummary[1][0]['total_debit'], 2));
        $senderTotalBalanceKes = $senderTotalCredit - $senderTotalDebit;
        $senderTotalBalanceKes = str_replace(',', '', number_format($senderTotalBalanceKes, 2));
-
-       
        $condition = array('wallet_id'=>$senderWalletID,'agent'=>1);
-
        $condition1 = array('wallet_id'=>$senderWalletID);
-
-       
        $sender_details = $this->SearchByCondition('customers',$condition);
-
        if(empty($sender_details))
        {
             $response['status'] = 'error';
             $response['message'] = 'agent not found';
             $response['agent'] = 0;
             $response['response'] = 0;
-
        }
        else{
         $user_transactions = $this->SearchByCondition('customer_ledger',$condition1);
-        
         $sender_phone =  $sender_details[0]['phone'];
         $agent =  $sender_details[0]['agent'];
- 
         $sender_wallet =  $sender_details[0]['wallet_id'];
         $created_on =  $sender_details[0]['created_on'];
         $account_number =  $sender_details[0]['account_number'];
- 
- 
-        
         $response =  array(
             'wallet_id'=>$sender_wallet,
             'agent'=>$agent,
@@ -1912,66 +1801,45 @@ class Operations extends CI_model
             'total_balance'=>$senderTotalBalanceKes,
             'transactions'=>$user_transactions,
             'response'=>1,
-
          );
        }
-
        return $response;
-
    }
 
-
-   public function PartnerAccount($partner_id)
-   {
-       
+    public function PartnerAccount($partner_id)
+    {
        $senderSummary = $this->Operations->partner_transection_summary($partner_id);
-        
        $senderTotalCredit_reserved = (float) str_replace(',', '', number_format($senderSummary[0][0]['total_credit_reserved'], 2));
        $senderTotalDebit_reserved = (float) str_replace(',', '', number_format($senderSummary[3][0]['total_debit_reserved'], 2));
        $senderTotalBalanceKes_reserved = $senderTotalCredit_reserved - $senderTotalDebit_reserved;
        $senderTotalBalanceKes_reserved = str_replace(',', '', number_format($senderTotalBalanceKes_reserved, 2));
-
-
        $senderTotalCredit_active = (float) str_replace(',', '', number_format($senderSummary[1][0]['total_credit_active'], 2));
        $senderTotalDebit_active = (float) str_replace(',', '', number_format($senderSummary[4][0]['total_debit_active'], 2));
        $senderTotalBalanceKes_active = $senderTotalCredit_active - $senderTotalDebit_active;
        $senderTotalBalanceKes_active = str_replace(',', '', number_format($senderTotalBalanceKes_active, 2));
-
        $senderTotalCredit_uncleared = (float) str_replace(',', '', number_format($senderSummary[2][0]['total_credit_uncleared'], 2));
        $senderTotalDebit_uncleared = (float) str_replace(',', '', number_format($senderSummary[5][0]['total_debit_uncleared'], 2));
        $senderTotalBalanceKes_uncleared = $senderTotalCredit_uncleared - $senderTotalDebit_uncleared;
        $senderTotalBalanceKes_uncleared = str_replace(',', '', number_format($senderTotalBalanceKes_uncleared, 2));
-
-       
        $condition1 = array('partner_id'=>$partner_id);
-       
        $sender_details = $this->Operations->SearchByCondition('partners',$condition1);
-
        $user_transactions = $this->Operations->SearchByCondition('partner_ledger',$condition1);
-
         if(!empty($sender_details[0]['partner_id']) || $sender_details[0]['partner_id'] != NULL || $sender_details[0]['partner_id'] != '')
         {
-            
             $partner_phone =  $sender_details[0]['partner_phone'];
             $sender_name =  $sender_details[0]['partner_name'];
             $sender_partner_id =  $sender_details[0]['partner_id'];
             $partner_created_on =  $sender_details[0]['partner_created_on'];
-            
             $data = array(
                 'partner_id'=>$sender_partner_id,
                 'partner_name'=>$sender_name,
                 'partner_phone'=>$partner_phone,
                 'created_on'=>$partner_created_on,
-
                 );
-
             $response['status'] = 'success';
             $response['message'] = 'partner data';
             $response['response'] = 1;
             $response['data'] = $data;
-
-
-
         }
         else
         {
@@ -1979,195 +1847,146 @@ class Operations extends CI_model
             $response['status'] = 'error';
             $response['message'] = 'partner not found';
             $response['response'] = 0;
-
-          
         }
-
         return $response;
+    }
 
-    
-        // return $senderSummary;
-
-   }
-   //BUSINESS MODULE
-
-   public function SystemAudit($partner_id)
+    public function SystemAudit($partner_id)
    {
-
-       $this->db->select('a.*,b.names,b.phone,b.email');
-
+        $this->db->select('a.*,b.names,b.phone,b.email');
         $this->db->from('system_audit a'); 
-
         $this->db->join('users b', 'b.id = a.user_id');  
-
         $this->db->where('a.partner_id',$partner_id);
-
         $query = $this->db->get(); 
-
         if($query->num_rows() != 0)
-
         {
-
             return $query->result_array();
-
         }
-
         else
-
         {
-
             return false;
-
         }
-
    }
 
 
-   public function SaveSystemAudit($partner_id,$user_id,$ip_address,$mac_address,$action,$audit_time)
+    public function SaveSystemAudit($partner_id,$user_id,$ip_address,$mac_address,$action,$audit_time)
     {
 	  $data = array(
-
-		 'partner_id' =>$partner_id,
-		 'user_id' =>$user_id,
-		 'ip_address' => $ip_address,
-		 'mac_address' => $mac_address,
-		 'action' => $action,
-		 'audit_time' => $audit_time,
-
+        'partner_id' =>$partner_id,
+        'user_id' =>$user_id,
+        'ip_address' => $ip_address,
+        'mac_address' => $mac_address,
+        'action' => $action,
+        'audit_time' => $audit_time,
 	  );
-
 	  $this->db->insert('system_audit', $data);
 
     }
 
 
-  //PARTNER MODULE STARTS HERE 
-
-  public function get_partners_customers($partner_id) 
-  {
-    // Select distinct wallet_id to count unique customers
-    $this->db->distinct();
-    $this->db->select('wallet_id');
-    $this->db->from('customer_ledger');
-    $this->db->where('partner_id', $partner_id);
-    $query = $this->db->get();
-
-    // Return the count of unique customers
-    return $query->num_rows();
-  }
-  public function total_partner_cr($partner_id)
-  {
-      $this->db->select('COALESCE(SUM(trans_amount), 0) AS total_cr', false);
-      $this->db->where('partner_id', $partner_id);
-      $this->db->where('cr_dr', 'cr');
-      $query = $this->db->get('partner_ledger');
-      return $query->row()->total_cr;
-  }
-  
-  public function total_partner_dr($partner_id)
-  {
-      $this->db->select('COALESCE(SUM(trans_amount), 0) AS total_dr', false);
-      $this->db->where('partner_id', $partner_id);
-      $this->db->where('cr_dr', 'dr');
-      $query = $this->db->get('partner_ledger');
-      return $query->row()->total_dr;
-  }
-  
-  public function total_partner_earning($partner_id)
-  {
-      $this->db->select('COALESCE(SUM(charge), 0) AS total_earning', false);
-      $this->db->where('partner_id', $partner_id);
-      $query = $this->db->get('partner_ledger');
-      return $query->row()->total_earning;
-  }
-
-
-  public function get_partner_earning_chart($partner_id)
-{
-    $this->db->select("DATE_FORMAT(trans_date, '%Y-%m') AS month", false);
-    $this->db->select("SUM(charge) AS earnings", false);
-    $this->db->from('partner_ledger');
-    $this->db->where('partner_id', $partner_id);
-    $this->db->group_by('month');
-    $this->db->order_by('month', 'ASC');
-    $query = $this->db->get();
-    return $query->result();
-}
-
-
-public function get_partner_customers_chart($partner_id)
-{
-    $this->db->select("DATE_FORMAT(created_at, '%Y-%m') AS month", false);
-    $this->db->select("COUNT(DISTINCT wallet_id) AS customer_count", false);
-    $this->db->from('customer_ledger');
-    $this->db->where('partner_id', $partner_id);
-    $this->db->group_by('month');
-    $this->db->order_by('month', 'ASC');
-    $query = $this->db->get();
-    return $query->result();
-}
-
-
-public function get_partner_financial_chart($partner_id)
-{
-    $this->db->select("DATE_FORMAT(trans_date, '%Y-%m') AS month", false);
-    $this->db->select("SUM(CASE WHEN cr_dr = 'cr' THEN trans_amount ELSE 0 END) AS credits", false);
-    $this->db->select("SUM(CASE WHEN cr_dr = 'dr' THEN trans_amount ELSE 0 END) AS debits", false);
-    $this->db->select("SUM(charge) AS earnings", false);
-    $this->db->from('partner_ledger');
-    $this->db->where('partner_id', $partner_id);
-    $this->db->group_by('month');
-    $this->db->order_by('month', 'ASC');
-    $query = $this->db->get();
-    return $query->result();
-}
-
-
-//GIFTING 
-
-public function total_gifting()
-{
-    $this->db->select('ROUND(SUM(paid_amount),2) AS total_gifts');
-
-    $this->db->from('customer_ledger');
-
-    $this->db->where(array('deriv' => 14,'cr_dr'=>'dr'));
-
-    $query = $this->db->get();
-
-
-
-    if ($query->num_rows() > 0) {
-
-        $result = $query->row()->total_gifts;
-
-    } else {
-
-        $result = 0;
-
+    //PARTNER MODULE STARTS HERE 
+    public function get_partners_customers($partner_id) 
+    {
+        // Select distinct wallet_id to count unique customers
+        $this->db->distinct();
+        $this->db->select('wallet_id');
+        $this->db->from('customer_ledger');
+        $this->db->where('partner_id', $partner_id);
+        $query = $this->db->get();
+        return $query->num_rows();
     }
 
-    return $result;
-}
+    public function total_partner_cr($partner_id)
+    {
+        $this->db->select('COALESCE(SUM(trans_amount), 0) AS total_cr', false);
+        $this->db->where('partner_id', $partner_id);
+        $this->db->where('cr_dr', 'cr');
+        $query = $this->db->get('partner_ledger');
+        return $query->row()->total_cr;
+    }
+  
+    public function total_partner_dr($partner_id)
+    {
+        $this->db->select('COALESCE(SUM(trans_amount), 0) AS total_dr', false);
+        $this->db->where('partner_id', $partner_id);
+        $this->db->where('cr_dr', 'dr');
+        $query = $this->db->get('partner_ledger');
+        return $query->row()->total_dr;
+    }
+  
+    public function total_partner_earning($partner_id)
+    {
+        $this->db->select('COALESCE(SUM(charge), 0) AS total_earning', false);
+        $this->db->where('partner_id', $partner_id);
+        $query = $this->db->get('partner_ledger');
+        return $query->row()->total_earning;
+    }
+
+    public function get_partner_earning_chart($partner_id)
+    {
+        $this->db->select("DATE_FORMAT(trans_date, '%Y-%m') AS month", false);
+        $this->db->select("SUM(charge) AS earnings", false);
+        $this->db->from('partner_ledger');
+        $this->db->where('partner_id', $partner_id);
+        $this->db->group_by('month');
+        $this->db->order_by('month', 'ASC');
+        $query = $this->db->get();
+        return $query->result();
+    }
+
+
+    public function get_partner_customers_chart($partner_id)
+    {
+        $this->db->select("DATE_FORMAT(created_at, '%Y-%m') AS month", false);
+        $this->db->select("COUNT(DISTINCT wallet_id) AS customer_count", false);
+        $this->db->from('customer_ledger');
+        $this->db->where('partner_id', $partner_id);
+        $this->db->group_by('month');
+        $this->db->order_by('month', 'ASC');
+        $query = $this->db->get();
+        return $query->result();
+    }
+
+    public function get_partner_financial_chart($partner_id)
+    {
+        $this->db->select("DATE_FORMAT(trans_date, '%Y-%m') AS month", false);
+        $this->db->select("SUM(CASE WHEN cr_dr = 'cr' THEN trans_amount ELSE 0 END) AS credits", false);
+        $this->db->select("SUM(CASE WHEN cr_dr = 'dr' THEN trans_amount ELSE 0 END) AS debits", false);
+        $this->db->select("SUM(charge) AS earnings", false);
+        $this->db->from('partner_ledger');
+        $this->db->where('partner_id', $partner_id);
+        $this->db->group_by('month');
+        $this->db->order_by('month', 'ASC');
+        $query = $this->db->get();
+        return $query->result();
+    }
+
+    public function total_gifting()
+    {
+        $this->db->select('ROUND(SUM(paid_amount),2) AS total_gifts');
+        $this->db->from('customer_ledger');
+        $this->db->where(array('deriv' => 14,'cr_dr'=>'dr'));
+        $query = $this->db->get();
+        if ($query->num_rows() > 0) {
+            $result = $query->row()->total_gifts;
+        } else {
+            $result = 0;
+        }
+        return $result;
+    }
 
 
 
-public function Search_gift()
-{
-    $this->db->select('*');
-
-    $this->db->from('customer_ledger');
-
-    $this->db->where(array('deriv' => 14,'cr_dr'=>'dr'));
-
-    $this->db->order_by('customer_ledger_id DESC');
-
-    $query = $this->db->get();
-
-    $result = $query->result();
-
-    return $result;
-}
+    public function Search_gift()
+    {
+        $this->db->select('*');
+        $this->db->from('customer_ledger');
+        $this->db->where(array('deriv' => 14,'cr_dr'=>'dr'));
+        $this->db->order_by('customer_ledger_id DESC');
+        $query = $this->db->get();
+        $result = $query->result();
+        return $result;
+    }
 
 }
 

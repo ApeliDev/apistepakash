@@ -54,24 +54,40 @@ defined('BASEPATH') or exit('No direct script access allowed');
 $route['default_controller'] = 'welcome';
 $route['signup'] = 'Auth/CreateAccount';
 $route['login'] = 'Auth/Login';
-//$route['derivauth'] = 'auth/derivauth';
-// deriv
+
+// deriv authentication
 $route['DerivOAuth'] = 'Auth/DerivOAuth';
 $route['DerivCallback'] = 'Auth/DerivCallback';
 $route['GetDerivSessionData'] = 'Auth/GetDerivSessionData';
 
+// deriv transactions
+$route['deriv_withdraw'] = 'Main/WithdrawFromDeriv';
+$route['deriv_deposit'] = 'Main/DepositToDeriv';
+
+// deriv callbacks
+$route['deposit_callback'] = 'Deriv/deposit_callback';
+$route['transfer_error'] = 'Deriv/transfer_error';
+$route['balance_update'] = 'Deriv/balance_update';
+
+// authentication
 $route['sendotp'] = 'Auth/sendotp';
 $route['verifyotp'] = 'Auth/verifyOtp';
 $route['updatepassword'] = 'Auth/updatepassword';
 $route['passwordupdate'] = 'Main/passwordupdate';
 $route['updatephone'] = 'Main/updatephone';
-$route['deriv_withdraw'] = 'Main/WithdrawFromDeriv';
-$route['deriv_deposit'] = 'Main/DepositToDeriv';
+
+// mpesa transactions
 $route['deposit_mpesa'] = 'Main/DepositFromMpesa';
 $route['mpesa_withdraw'] = 'Main/WithdrawToMpesa';
 $route['mpesa_deposit'] = 'Main/DepositToDeriv';
+
+// mpesa callbacks
 $route['stkresults'] = 'Money/stkresults';
 $route['b2c_result'] = 'Money/b2c_result';
+$route['mpesa_c2b_results'] = 'Money/mpesa_c2b_results';
+$route['validation_url'] = 'Money/validation_url';
+
+// app functionality
 $route['home_data'] = 'Main/home';
 $route['user_transactions'] = 'Main/transactions';
 $route['balance'] = 'Main/balance';
@@ -79,13 +95,10 @@ $route['outbox'] = 'Main/outbox';
 $route['send_p2p'] = 'Main/StepakashP2P';
 $route['mpesa_b2c_test'] = 'Main/Mpesa_b2c_test';
 $route['register_url'] = 'Money/register_url';
-$route['mpesa_c2b_results'] = 'Money/mpesa_c2b_results';
-$route['validation_url'] = 'Money/validation_url';
 $route['next_receipt'] = 'Money/next_receipt';
 $route['query_receipt'] = 'Main/query_receipt';
 $route['pay_now'] = 'Main/pay_now';
 $route['send_gift'] = 'Main/send_gift';
-
 
 //ADMIN 
 $route['adminLogin'] = 'Auth/adminLogin';
