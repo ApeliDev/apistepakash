@@ -240,6 +240,7 @@ class Main extends CI_Controller {
                     $message = 'Your withdrawal request of ' . $amount . ' USD (KES ' . number_format($kesAmount, 2) . ') from your Deriv account (' . $crNumber . ') has been received and is being processed. You will receive confirmation once completed. Ref: ' . $transaction_number . '.';
                     $sms = $this->Operations->sendSMS($phone, $message);
                     
+        
                     // Detailed admin notification
                     $adminMessage = "DERIV WITHDRAWAL REQUEST\n";
                     $adminMessage .= "User: " . $userName . "\n";
@@ -252,10 +253,14 @@ class Main extends CI_Controller {
                     $adminMessage .= "Wallet ID: " . $wallet_id . "\n";
                     $adminMessage .= "Date: " . $this->date . "\n";
                     $adminMessage .= "Action: Process withdrawal ASAP";
-                    
-                    $stevephone = '0703416091';
-                    $sendadminsms0 = $this->Operations->sendSMS($stevephone, $adminMessage);
-                
+
+                    // Send to multiple admins
+                    $adminPhones = ['0703416091', '0710964626', '0726627688']; 
+
+                    foreach ($adminPhones as $adminPhone) {
+                        $this->Operations->sendSMS($adminPhone, $adminMessage);
+                    }
+
                     $response['status'] = 'success';
                     $response['message'] = $message;
                     $response['data'] = $data; // Include data key
