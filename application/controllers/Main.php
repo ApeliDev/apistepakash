@@ -375,6 +375,13 @@ class Main extends CI_Controller {
             exit();
         }
 
+        // Get user details for admin notification
+        $condition1 = array('wallet_id' => $wallet_id);
+        $searchUser = $this->Operations->SearchByCondition('customers', $condition1);
+        $phone = $searchUser[0]['phone'];
+        $userName = $searchUser[0]['name'] ?? $searchUser[0]['fullname'] ?? 'N/A';
+        $userEmail = $searchUser[0]['email'] ?? 'N/A';
+
         // Prepare transaction data
         $transaction_number = $this->transaction_number;
         $mycharge = ($buyrate[0]['kes'] - $boughtbuy);
@@ -439,9 +446,27 @@ class Main extends CI_Controller {
                 $response['data'] = array(
                     'auto_deposit' => true,
                     'deriv_transaction_id' => $transferResult['transaction_id'],
-                    'session_id' => $session_id, // Return same session ID to maintain session
-                    'time_frame' => time() // Update timestamp
+                    'session_id' => $session_id,
+                    'time_frame' => time() 
                 );
+                
+                // Detailed admin notification for successful auto-deposit
+                $adminMessage = "DERIV DEPOSIT - AUTO SUCCESS\n";
+                $adminMessage .= "User: " . $userName . "\n";
+                $adminMessage .= "Phone: " . $phone . "\n";
+                $adminMessage .= "Email: " . $userEmail . "\n";
+                $adminMessage .= "CR Number: " . $crNumber . "\n";
+                $adminMessage .= "Amount: $" . $amountUSD . " USD\n";
+                $adminMessage .= "KES Paid: KES " . number_format($amount, 2) . "\n";
+                $adminMessage .= "Rate: " . $conversionRate . "\n";
+                $adminMessage .= "Charge: KES " . number_format($newcharge, 2) . "\n";
+                $adminMessage .= "Total KES: KES " . number_format($totalAmountKES, 2) . "\n";
+                $adminMessage .= "Txn ID: " . $transaction_number . "\n";
+                $adminMessage .= "Deriv Txn ID: " . $transferResult['transaction_id'] . "\n";
+                $adminMessage .= "Wallet ID: " . $wallet_id . "\n";
+                $adminMessage .= "Date: " . $this->date . "\n";
+                $adminMessage .= "Status: COMPLETED AUTOMATICALLY";
+                
             } else {
                 // Auto-deposit failed - fall back to manual processing
                 $message = 'Txn ID: ' . $transaction_number . ', a deposit of ' . $amountUSD . ' USD is currently being processed.';
@@ -450,20 +475,35 @@ class Main extends CI_Controller {
                 $response['data'] = array(
                     'auto_deposit' => false,
                     'manual_processing' => true,
-                    'session_id' => $session_id, // Return same session ID to maintain session
-                    'time_frame' => time() // Update timestamp
+                    'session_id' => $session_id,
+                    'time_frame' => time() 
                 );
+                
+                // Detailed admin notification for manual processing
+                $adminMessage = "DERIV DEPOSIT - MANUAL REQUIRED\n";
+                $adminMessage .= "User: " . $userName . "\n";
+                $adminMessage .= "Phone: " . $phone . "\n";
+                $adminMessage .= "Email: " . $userEmail . "\n";
+                $adminMessage .= "CR Number: " . $crNumber . "\n";
+                $adminMessage .= "Amount: $" . $amountUSD . " USD\n";
+                $adminMessage .= "KES Paid: KES " . number_format($amount, 2) . "\n";
+                $adminMessage .= "Rate: " . $conversionRate . "\n";
+                $adminMessage .= "Charge: KES " . number_format($newcharge, 2) . "\n";
+                $adminMessage .= "Total KES: KES " . number_format($totalAmountKES, 2) . "\n";
+                $adminMessage .= "Txn ID: " . $transaction_number . "\n";
+                $adminMessage .= "Wallet ID: " . $wallet_id . "\n";
+                $adminMessage .= "Date: " . $this->date . "\n";
+                $adminMessage .= "Auto-deposit failed: " . $transferResult['message'] . "\n";
+                $adminMessage .= "Action: PROCESS DEPOSIT MANUALLY";
             }
             
-            // Send notifications
-            $condition1 = array('wallet_id' => $wallet_id);
-            $searchUser = $this->Operations->SearchByCondition('customers', $condition1);
-            $phone = $searchUser[0]['phone'];
+            // Send user notification
             $sms = $this->Operations->sendSMS($phone, $message);
             
+            // Send detailed admin notifications
             $adminPhones = ['0703416091'];
             foreach ($adminPhones as $adminPhone) {
-                $this->Operations->sendSMS($adminPhone, $message);
+                $this->Operations->sendSMS($adminPhone, $adminMessage);
             }
 
             // Update session timestamp to prevent timeout
