@@ -1,6 +1,6 @@
 <?php
 defined('BASEPATH') OR exit('No direct script access allowed');
-use WebSocket\Client;
+use Rndwiga\DerivApis\DerivAPI;
 class Main extends CI_Controller {
     
     private $transaction_id;
@@ -316,7 +316,7 @@ class Main extends CI_Controller {
         exit();
     }
 
-    // Validate session - with extended timeout for Deriv transactions
+    // Validate session - FIXED: Use extended timeout from the start
     $session_table = 'login_session';
     $session_condition = array('session_id' => $session_id);
     $checksession = $this->Operations->SearchByCondition($session_table, $session_condition);
@@ -329,11 +329,29 @@ class Main extends CI_Controller {
         exit();
     }
 
-    // Extend session validity for Deriv transactions
+    // FIXED: Check session timeout with extended timeframe for Deriv transactions from the beginning
+    $loggedtime = $checksession[0]['created_on'];
+    $currentTime = $this->date;
+    $loggedTimestamp = strtotime($loggedtime);
+    $currentTimestamp = strtotime($currentTime);
+    $timediff = $currentTimestamp - $loggedTimestamp;
+    
+    // Use longer timeout for Deriv transactions (30 minutes instead of 10)
+    $deriv_timeframe = 1800; // 30 minutes in seconds
+    
+    // FIXED: Update session timestamp immediately to prevent timeout during processing
     $this->Operations->UpdateData('login_session', 
         array('session_id' => $session_id), 
         array('created_on' => $this->date)
     );
+    
+    if ($timediff > $deriv_timeframe) {
+        $response['status'] = 'fail';
+        $response['message'] = 'Session expired. Please login again to continue with Deriv transactions.';
+        $response['data'] = null;
+        echo json_encode($response);
+        exit();
+    }
 
     $wallet_id = $checksession[0]['wallet_id'];
     $summary = $this->Operations->customer_transection_summary($wallet_id);
@@ -428,46 +446,29 @@ class Main extends CI_Controller {
     $save_system_ledger = $this->Operations->Create('system_ledger', $customer_ledger_data);
 
     if ($save === TRUE && $save_customer_ledger === TRUE && $save_system_ledger === TRUE) {
-        // Initialize Deriv API with your app ID and token
-        require_once APPPATH . 'vendor/autoload.php';
-        $appId = 76420; // Your Deriv app ID
-        $token = 'DidPRclTKE0WYtT'; // Your payment agent token
+        // Attempt auto-deposit using the new SDK
+        $transferResult = $this->processAutoDepositWithSDK($transaction_id, $amountUSD, $crNumber, $wallet_id, $transaction_number);
         
-        try {
-            $api = new \Rndwiga\DerivApis\DerivAPI($appId, $token);
-            
-            // Perform the transfer
-            $transferResult = $api->cashier()->paymentAgentTransfer([
-                'amount' => $amountUSD,
-                'currency' => $currency,
-                'transfer_to' => $crNumber,
-                'description' => "Deposit to account $crNumber - Txn: $transaction_number",
-                'req_id' => $transaction_id
-            ]);
-            
-            // Update request status to processed
-            $this->Operations->UpdateData($table, 
-                ['transaction_id' => $transaction_id], 
-                [
-                    'status' => 1,
-                    'deposited' => $amountUSD,
-                    'deriv_transaction_id' => $transferResult['paymentagent_transfer']['transaction_id'],
-                    'processed_date' => $this->date
-                ]
-            );
-            
+        if ($transferResult['status'] === 'success') {
+            // Auto-deposit successful
             $message = 'Txn ID: ' . $transaction_number . ', a deposit of ' . $amountUSD . ' USD has been successfully processed.';
             $response['status'] = 'success';
             $response['message'] = $message;
             $response['data'] = array(
                 'auto_deposit' => true,
-                'deriv_transaction_id' => $transferResult['paymentagent_transfer']['transaction_id'],
+                'deriv_transaction_id' => $transferResult['transaction_id'],
                 'session_id' => $session_id,
                 'time_frame' => time() 
             );
             
-            // Detailed admin notification for successful deposit
-            $adminMessage = "DERIV DEPOSIT - SUCCESS\n";
+            // Update session again after successful transaction
+            $this->Operations->UpdateData('login_session', 
+                array('session_id' => $session_id), 
+                array('created_on' => $this->date)
+            );
+            
+            // Detailed admin notification for successful auto-deposit
+            $adminMessage = "DERIV DEPOSIT - AUTO SUCCESS\n";
             $adminMessage .= "User: " . $userName . "\n";
             $adminMessage .= "Phone: " . $phone . "\n";
             $adminMessage .= "Email: " . $userEmail . "\n";
@@ -478,12 +479,12 @@ class Main extends CI_Controller {
             $adminMessage .= "Charge: KES " . number_format($newcharge, 2) . "\n";
             $adminMessage .= "Total KES: KES " . number_format($totalAmountKES, 2) . "\n";
             $adminMessage .= "Txn ID: " . $transaction_number . "\n";
-            $adminMessage .= "Deriv Txn ID: " . $transferResult['paymentagent_transfer']['transaction_id'] . "\n";
+            $adminMessage .= "Deriv Txn ID: " . $transferResult['transaction_id'] . "\n";
             $adminMessage .= "Wallet ID: " . $wallet_id . "\n";
             $adminMessage .= "Date: " . $this->date . "\n";
-            $adminMessage .= "Status: COMPLETED";
+            $adminMessage .= "Status: COMPLETED AUTOMATICALLY";
             
-        } catch (Exception $e) {
+        } else {
             // Auto-deposit failed - fall back to manual processing
             $message = 'Txn ID: ' . $transaction_number . ', a deposit of ' . $amountUSD . ' USD is currently being processed.';
             $response['status'] = 'success';
@@ -493,6 +494,12 @@ class Main extends CI_Controller {
                 'manual_processing' => true,
                 'session_id' => $session_id,
                 'time_frame' => time() 
+            );
+            
+            // Update session even for manual processing
+            $this->Operations->UpdateData('login_session', 
+                array('session_id' => $session_id), 
+                array('created_on' => $this->date)
             );
             
             // Detailed admin notification for manual processing
@@ -509,7 +516,7 @@ class Main extends CI_Controller {
             $adminMessage .= "Txn ID: " . $transaction_number . "\n";
             $adminMessage .= "Wallet ID: " . $wallet_id . "\n";
             $adminMessage .= "Date: " . $this->date . "\n";
-            $adminMessage .= "Auto-deposit failed: " . $e->getMessage() . "\n";
+            $adminMessage .= "Auto-deposit failed: " . $transferResult['message'] . "\n";
             $adminMessage .= "Action: PROCESS DEPOSIT MANUALLY";
         }
         
@@ -521,6 +528,7 @@ class Main extends CI_Controller {
         foreach ($adminPhones as $adminPhone) {
             $this->Operations->sendSMS($adminPhone, $adminMessage);
         }
+
     } else {
         $response['status'] = 'fail';
         $response['message'] = 'Unable to process your request now try again';
@@ -530,27 +538,44 @@ class Main extends CI_Controller {
     echo json_encode($response);
 }
 
-    private function processAutoDeposit($transaction_id, $amount, $crNumber, $wallet_id, $transaction_number)
-    {
-        // 1. Check agent balance first
-        $balanceCheck = $this->checkAgentBalance();
+    private function processAutoDepositWithSDK($transaction_id, $amount, $crNumber, $wallet_id, $transaction_number)
+{
+    try {
+        // Replace with your actual app ID and token
+        $appId = 76420; // Your app ID
+        $token = 'DidPRclTKE0WYtT'; // Your payment agent token
         
-        if (!$balanceCheck['success'] || $balanceCheck['balance'] < $amount) {
-            return array(
-                'status' => 'error',
-                'message' => 'Insufficient agent balance or balance check failed'
-            );
+        // Create Deriv API instance
+        $api = new DerivAPI($appId, $token);
+        
+        // 1. Check agent balance first
+        $balanceInfo = $api->account()->getBalance();
+        
+        if (!$balanceInfo || !isset($balanceInfo['balance'])) {
+            throw new Exception('Unable to retrieve agent balance');
+        }
+        
+        $availableBalance = $balanceInfo['balance']['balance'];
+        
+        if ($availableBalance < $amount) {
+            throw new Exception('Insufficient agent balance. Available: $' . number_format($availableBalance, 2) . ', Required: $' . number_format($amount, 2));
         }
 
-        // 2. Perform the transfer
+        // 2. Perform the transfer using the SDK
         $transferDescription = "Deposit to account " . $crNumber . " - Txn: " . $transaction_number;
-        $transferResult = $this->performDerivTransfer($amount, 'USD', $crNumber, $transferDescription, $transaction_id);
         
-        if (!$transferResult['success']) {
-            return array(
-                'status' => 'error',
-                'message' => $transferResult['error']
-            );
+        $transferResult = $api->cashier()->paymentAgentTransfer([
+            'amount' => $amount,
+            'currency' => 'USD',
+            'transfer_to' => $crNumber,
+            'description' => $transferDescription
+        ]);
+
+        // Always disconnect after use
+        $api->disconnect();
+
+        if (!$transferResult || isset($transferResult['error'])) {
+            throw new Exception($transferResult['error']['message'] ?? 'Transfer failed');
         }
 
         // 3. Update database if transfer successful
@@ -559,7 +584,7 @@ class Main extends CI_Controller {
         $data = array(
             'status' => 1,
             'deposited' => $amount,
-            'deriv_transaction_id' => $transferResult['transaction_id'],
+            'deriv_transaction_id' => $transferResult['paymentagent_transfer']['transaction_id'],
             'processed_date' => $this->date
         );
         
@@ -567,10 +592,18 @@ class Main extends CI_Controller {
 
         return array(
             'status' => 'success',
-            'transaction_id' => $transferResult['transaction_id'],
-            'client_to_full_name' => $transferResult['client_to_full_name']
+            'transaction_id' => $transferResult['paymentagent_transfer']['transaction_id'],
+            'client_to_full_name' => $transferResult['paymentagent_transfer']['client_to_full_name'] ?? 'N/A'
+        );
+
+    } catch (Exception $e) {
+        return array(
+            'status' => 'error',
+            'message' => $e->getMessage()
         );
     }
+}
+
 
 	
 	public function initiate()
@@ -850,126 +883,77 @@ class Main extends CI_Controller {
         echo json_encode($response);
     }
 
-    public function checkAgentBalance()
-    {
+    public function checkAgentBalanceWithSDK()
+{
+    try {
         $appId = 76420;
-        $endpoint = 'ws.derivws.com';
-        $url = "wss://{$endpoint}/websockets/v3?app_id={$appId}";
         $token = 'DidPRclTKE0WYtT';
         
-        try {
-            // Use the WebSocket Client that's already imported
-            $client = new \WebSocket\Client($url, [
-                'timeout' => 10,
-                'headers' => []
-            ]);
-            
-            // Send authorization request
-            $authRequest = json_encode([
-                "authorize" => $token,
-                "req_id" => 1
-            ]);
-            
-            $client->send($authRequest);
-            $authResponse = $client->receive();
-            $authData = json_decode($authResponse, true);
-            
-            if (isset($authData['error'])) {
-                throw new Exception("Authorization failed: " . $authData['error']['message']);
-            }
-            
-            // Get balance
-            $balanceRequest = json_encode([
-                "balance" => 1,
-                "req_id" => 2
-            ]);
-            
-            $client->send($balanceRequest);
-            $balanceResponse = $client->receive();
-            $balanceData = json_decode($balanceResponse, true);
-            
-            $client->close();
-            
-            if (isset($balanceData['error'])) {
-                throw new Exception("Balance check failed: " . $balanceData['error']['message']);
-            }
-            
-            return [
-                'success' => true,
-                'balance' => $balanceData['balance']['balance'],
-                'currency' => $balanceData['balance']['currency']
-            ];
-            
-        } catch (Exception $e) {
-            return [
-                'success' => false,
-                'error' => $e->getMessage()
-            ];
+        $api = new DerivAPI($appId, $token);
+        $balanceInfo = $api->account()->getBalance();
+        $api->disconnect();
+        
+        if (!$balanceInfo || !isset($balanceInfo['balance'])) {
+            throw new Exception('Unable to retrieve balance information');
         }
+        
+        return [
+            'success' => true,
+            'balance' => $balanceInfo['balance']['balance'],
+            'currency' => $balanceInfo['balance']['currency']
+        ];
+        
+    } catch (Exception $e) {
+        return [
+            'success' => false,
+            'error' => $e->getMessage()
+        ];
     }
+}
 
-    public function performDerivTransfer($amount, $currency, $transferTo, $description, $requestId)
-    {
+    public function performDerivTransferWithSDK($amount, $currency, $transferTo, $description, $requestId)
+{
+    try {
         $appId = 76420;
-        $endpoint = 'ws.derivws.com';
-        $url = "wss://{$endpoint}/websockets/v3?app_id={$appId}";
         $token = 'DidPRclTKE0WYtT';
         
-        try {
-            $client = new \WebSocket\Client($url, [
-                'timeout' => 15,
-                'headers' => []
-            ]);
-            
-            // Send authorization request
-            $authRequest = json_encode([
-                "authorize" => $token,
-                "req_id" => 1
-            ]);
-            
-            $client->send($authRequest);
-            $authResponse = $client->receive();
-            $authData = json_decode($authResponse, true);
-            
-            if (isset($authData['error'])) {
-                throw new Exception("Authorization failed: " . $authData['error']['message']);
-            }
-            
-            // Perform payment agent transfer
-            $transferRequest = json_encode([
-                "paymentagent_transfer" => 1,
-                "amount" => $amount,
-                "currency" => $currency,
-                "transfer_to" => $transferTo,
-                "description" => $description,
-                "req_id" => $requestId
-            ]);
-            
-            $client->send($transferRequest);
-            $transferResponse = $client->receive();
-            $transferData = json_decode($transferResponse, true);
-            
-            $client->close();
-            
-            if (isset($transferData['error'])) {
-                throw new Exception("Transfer failed: " . $transferData['error']['message']);
-            }
-            
-            return [
-                'success' => true,
-                'transaction_id' => $transferData['paymentagent_transfer']['transaction_id'],
-                'client_to_full_name' => $transferData['paymentagent_transfer']['client_to_full_name'],
-                'client_to_loginid' => $transferData['paymentagent_transfer']['client_to_loginid'],
-                'paymentagent_transfer' => $transferData['paymentagent_transfer']
-            ];
-            
-        } catch (Exception $e) {
-            return [
-                'success' => false,
-                'error' => $e->getMessage()
-            ];
+        $api = new DerivAPI($appId, $token);
+        
+        // Check balance first
+        $balanceInfo = $api->account()->getBalance();
+        if (!$balanceInfo || $balanceInfo['balance']['balance'] < $amount) {
+            throw new Exception('Insufficient balance for transfer');
         }
+        
+        // Perform transfer
+        $transferResult = $api->cashier()->paymentAgentTransfer([
+            'amount' => $amount,
+            'currency' => $currency,
+            'transfer_to' => $transferTo,
+            'description' => $description
+        ]);
+        
+        $api->disconnect();
+        
+        if (!$transferResult || isset($transferResult['error'])) {
+            throw new Exception($transferResult['error']['message'] ?? 'Transfer failed');
+        }
+        
+        return [
+            'success' => true,
+            'transaction_id' => $transferResult['paymentagent_transfer']['transaction_id'],
+            'client_to_full_name' => $transferResult['paymentagent_transfer']['client_to_full_name'],
+            'client_to_loginid' => $transferResult['paymentagent_transfer']['client_to_loginid'],
+            'paymentagent_transfer' => $transferResult['paymentagent_transfer']
+        ];
+        
+    } catch (Exception $e) {
+        return [
+            'success' => false,
+            'error' => $e->getMessage()
+        ];
     }
+}
     
     public function depositsrequest()
     {
