@@ -230,4 +230,53 @@ class Deriv extends CI_Controller {
         
         echo json_encode(['ResultCode' => 0, 'ResultDesc' => 'Balance update received']);
     }
+
+    public function derivWithdrawalCallback()
+    {
+        $callbackData = file_get_contents('php://input');
+        $data = json_decode($callbackData, true);
+        
+        // Log the callback
+        $logFile = "deriv_callbacks/withdrawal_" . date('Y-m-d_H-i-s') . ".json";
+        file_put_contents($logFile, json_encode($data, JSON_PRETTY_PRINT));
+
+        if (isset($data['withdraw'])) {
+            $withdrawal = $data['withdraw'];
+            $referenceId = $withdrawal['reference_id'];
+            $status = $withdrawal['status']; // 'success', 'pending', 'rejected'
+            $transactionId = $withdrawal['transaction_id'] ?? null;
+            
+            // Find the withdrawal request
+            $condition = array('deriv_reference_id' => $referenceId);
+            $request = $this->Operations->SearchByCondition('deriv_withdraw_request', $condition);
+            
+            if (!empty($request)) {
+                $request = $request[0];
+                $updateData = array(
+                    'deriv_verification_status' => $status,
+                    'deriv_transaction_id' => $transactionId
+                );
+                
+                if ($status === 'success') {
+                    $updateData['deriv_verified_at'] = $this->date;
+                    $updateData['status'] = 1;
+                    $updateData['withdraw'] = $request['amount'];
+                    
+                    // Get user details for notification
+                    $user = $this->Operations->SearchByCondition('customers', 
+                        array('wallet_id' => $request['wallet_id']));
+                    
+                    if (!empty($user)) {
+                        $phone = $user[0]['phone'];
+                        $message = "Your withdrawal of {$request['amount']} USD has been completed. Transaction ID: {$transactionId}";
+                        $this->Operations->sendSMS($phone, $message);
+                    }
+                }
+                
+                $this->Operations->UpdateData('deriv_withdraw_request', $condition, $updateData);
+            }
+        }
+        
+        echo json_encode(['ResultCode' => 0, 'ResultDesc' => 'Callback processed']);
+    }
 }
