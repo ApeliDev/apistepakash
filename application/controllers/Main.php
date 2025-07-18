@@ -364,9 +364,9 @@ class Main extends CI_Controller {
         $amountUSD = round($amount / $conversionRate, 2);
 
         // Validate amount
-        if ($amountUSD < 10) {
+        if ($amountUSD < 1.5) {
             $response['status'] = 'error';
-            $response['message'] = 'The amount must be greater than $10.';
+            $response['message'] = 'The amount must be greater than $1.50.';
             $response['data'] = null;
             echo json_encode($response);
             exit();
