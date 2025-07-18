@@ -28,6 +28,7 @@ class ComposerStaticInitdf1f81a0630f57ab5fb14da5bc0832c6
         ),
         'R' => 
         array (
+            'Rndwiga\\DerivApis\\' => 18,
             'React\\Stream\\' => 13,
             'React\\Socket\\' => 13,
             'React\\Promise\\' => 14,
@@ -43,6 +44,7 @@ class ComposerStaticInitdf1f81a0630f57ab5fb14da5bc0832c6
             'Psr\\Http\\Message\\' => 17,
             'Phrity\\Util\\' => 12,
             'Phrity\\Net\\' => 11,
+            'Phrity\\Comparison\\' => 18,
         ),
         'G' => 
         array (
@@ -61,11 +63,15 @@ class ComposerStaticInitdf1f81a0630f57ab5fb14da5bc0832c6
         ),
         'WebSocket\\' => 
         array (
-            0 => __DIR__ . '/..' . '/textalk/websocket/lib',
+            0 => __DIR__ . '/..' . '/phrity/websocket/src',
         ),
         'Symfony\\Polyfill\\Php80\\' => 
         array (
             0 => __DIR__ . '/..' . '/symfony/polyfill-php80',
+        ),
+        'Rndwiga\\DerivApis\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/rndwiga/deriv_apis/src',
         ),
         'React\\Stream\\' => 
         array (
@@ -114,7 +120,12 @@ class ComposerStaticInitdf1f81a0630f57ab5fb14da5bc0832c6
         ),
         'Phrity\\Net\\' => 
         array (
-            0 => __DIR__ . '/..' . '/phrity/net-uri/src',
+            0 => __DIR__ . '/..' . '/phrity/net-stream/src',
+            1 => __DIR__ . '/..' . '/phrity/net-uri/src',
+        ),
+        'Phrity\\Comparison\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/phrity/comparison/src',
         ),
         'GuzzleHttp\\Psr7\\' => 
         array (

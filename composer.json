@@ -1,7 +1,7 @@
 {
     "require": {
-        "textalk/websocket": "^1.6",
         "ratchet/pawl": "^0.4.3",
-        "centrifugal/phpcent": "^6.0"
+        "centrifugal/phpcent": "^6.0",
+        "rndwiga/deriv_apis": "^0.01.0"
     }
 }

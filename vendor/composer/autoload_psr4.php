@@ -7,8 +7,9 @@ $baseDir = dirname($vendorDir);
 
 return array(
     'phpcent\\' => array($vendorDir . '/centrifugal/phpcent/src'),
-    'WebSocket\\' => array($vendorDir . '/textalk/websocket/lib'),
+    'WebSocket\\' => array($vendorDir . '/phrity/websocket/src'),
     'Symfony\\Polyfill\\Php80\\' => array($vendorDir . '/symfony/polyfill-php80'),
+    'Rndwiga\\DerivApis\\' => array($vendorDir . '/rndwiga/deriv_apis/src'),
     'React\\Stream\\' => array($vendorDir . '/react/stream/src'),
     'React\\Socket\\' => array($vendorDir . '/react/socket/src'),
     'React\\Promise\\' => array($vendorDir . '/react/promise/src'),
@@ -20,7 +21,8 @@ return array(
     'Psr\\Log\\' => array($vendorDir . '/psr/log/src'),
     'Psr\\Http\\Message\\' => array($vendorDir . '/psr/http-factory/src', $vendorDir . '/psr/http-message/src'),
     'Phrity\\Util\\' => array($vendorDir . '/phrity/util-errorhandler/src'),
-    'Phrity\\Net\\' => array($vendorDir . '/phrity/net-uri/src'),
+    'Phrity\\Net\\' => array($vendorDir . '/phrity/net-stream/src', $vendorDir . '/phrity/net-uri/src'),
+    'Phrity\\Comparison\\' => array($vendorDir . '/phrity/comparison/src'),
     'GuzzleHttp\\Psr7\\' => array($vendorDir . '/guzzlehttp/psr7/src'),
     'Evenement\\' => array($vendorDir . '/evenement/evenement/src'),
 );
