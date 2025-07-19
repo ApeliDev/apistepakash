@@ -13,7 +13,7 @@ use JsonException;
 class DerivBalanceChecker
 {
     private const APP_ID = 76420;
-    private const ENDPOINT = 'ws.binaryws.com';
+    private const ENDPOINT = 'ws.derivws.com';
     private const TIMEOUT = 10;
     private const LOW_BALANCE_THRESHOLD = 100;
 
