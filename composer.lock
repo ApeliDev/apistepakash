@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "a33dcd5f9ff089b5f08b8988b5ebdebc",
+    "content-hash": "b6792c4b5c4eb2d658c5b6d56176e1b7",
     "packages": [
         {
             "name": "centrifugal/phpcent",
@@ -220,299 +220,6 @@
                 }
             ],
             "time": "2025-03-27T12:30:47+00:00"
-        },
-        {
-            "name": "phrity/comparison",
-            "version": "1.4.0",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/sirn-se/phrity-comparison.git",
-                "reference": "aedd44d59db08de7d6c31812d1490c22aab35c92"
-            },
-            "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/sirn-se/phrity-comparison/zipball/aedd44d59db08de7d6c31812d1490c22aab35c92",
-                "reference": "aedd44d59db08de7d6c31812d1490c22aab35c92",
-                "shasum": ""
-            },
-            "require": {
-                "php": "^8.1"
-            },
-            "require-dev": {
-                "php-coveralls/php-coveralls": "^2.0",
-                "phpstan/phpstan": "^2.0",
-                "phpunit/phpunit": "^10.0 | ^11.0  | ^12.0",
-                "squizlabs/php_codesniffer": "^3.5"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "Phrity\\Comparison\\": "src/"
-                }
-            },
-            "notification-url": "https://packagist.org/downloads/",
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Sören Jensen",
-                    "email": "sirn@sirn.se",
-                    "homepage": "https://phrity.sirn.se"
-                }
-            ],
-            "description": "Interfaces and helper trait for comparing objects. Comparator for sort and filter applications.",
-            "homepage": "https://phrity.sirn.se/comparison",
-            "keywords": [
-                "comparable",
-                "comparator",
-                "comparison",
-                "equalable",
-                "filter",
-                "sort"
-            ],
-            "support": {
-                "issues": "https://github.com/sirn-se/phrity-comparison/issues",
-                "source": "https://github.com/sirn-se/phrity-comparison/tree/1.4.0"
-            },
-            "time": "2025-05-26T20:12:39+00:00"
-        },
-        {
-            "name": "phrity/net-stream",
-            "version": "2.3.0",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/sirn-se/phrity-net-stream.git",
-                "reference": "0ecc50a8ee7a708033d391ed60878b0bd5397bf8"
-            },
-            "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/sirn-se/phrity-net-stream/zipball/0ecc50a8ee7a708033d391ed60878b0bd5397bf8",
-                "reference": "0ecc50a8ee7a708033d391ed60878b0bd5397bf8",
-                "shasum": ""
-            },
-            "require": {
-                "php": "^8.1",
-                "phrity/util-errorhandler": "^1.1",
-                "psr/http-factory": "^1.0",
-                "psr/http-message": "^1.1 | ^2.0"
-            },
-            "require-dev": {
-                "php-coveralls/php-coveralls": "^2.0",
-                "phpstan/phpstan": "^2.0",
-                "phpunit/phpunit": "^10.0 | ^11.0  | ^12.0",
-                "phrity/net-uri": "^2.0",
-                "squizlabs/php_codesniffer": "^3.5"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "Phrity\\Net\\": "src/"
-                }
-            },
-            "notification-url": "https://packagist.org/downloads/",
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Sören Jensen",
-                    "email": "sirn@sirn.se",
-                    "homepage": "https://phrity.sirn.se"
-                }
-            ],
-            "description": "Socket stream classes implementing PSR-7 Stream and PSR-17 StreamFactory",
-            "homepage": "https://phrity.sirn.se/net-stream",
-            "keywords": [
-                "Socket",
-                "client",
-                "psr-17",
-                "psr-7",
-                "server",
-                "stream",
-                "stream factory"
-            ],
-            "support": {
-                "issues": "https://github.com/sirn-se/phrity-net-stream/issues",
-                "source": "https://github.com/sirn-se/phrity-net-stream/tree/2.3.0"
-            },
-            "time": "2025-05-22T08:28:09+00:00"
-        },
-        {
-            "name": "phrity/net-uri",
-            "version": "2.2.0",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/sirn-se/phrity-net-uri.git",
-                "reference": "08de4cf07e439c4708f572249659f09198ac99f0"
-            },
-            "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/sirn-se/phrity-net-uri/zipball/08de4cf07e439c4708f572249659f09198ac99f0",
-                "reference": "08de4cf07e439c4708f572249659f09198ac99f0",
-                "shasum": ""
-            },
-            "require": {
-                "ext-mbstring": "*",
-                "php": "^8.1",
-                "phrity/comparison": "^1.0",
-                "psr/http-factory": "^1.0",
-                "psr/http-message": "^1.1 | ^2.0"
-            },
-            "require-dev": {
-                "php-coveralls/php-coveralls": "^2.0",
-                "phpstan/phpstan": "^2.0",
-                "phpunit/phpunit": "^10.0 | ^11.0  | ^12.0",
-                "phrity/util-errorhandler": "^1.1",
-                "squizlabs/php_codesniffer": "^3.5"
-            },
-            "suggest": {
-                "ext-intl": "Enables IDN conversion for non-ASCII domains"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "Phrity\\Net\\": "src/"
-                }
-            },
-            "notification-url": "https://packagist.org/downloads/",
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Sören Jensen",
-                    "email": "sirn@sirn.se",
-                    "homepage": "https://phrity.sirn.se"
-                }
-            ],
-            "description": "PSR-7 Uri and PSR-17 UriFactory implementation",
-            "homepage": "https://phrity.sirn.se/net-uri",
-            "keywords": [
-                "psr-17",
-                "psr-7",
-                "uri",
-                "uri factory"
-            ],
-            "support": {
-                "issues": "https://github.com/sirn-se/phrity-net-uri/issues",
-                "source": "https://github.com/sirn-se/phrity-net-uri/tree/2.2.0"
-            },
-            "time": "2025-05-25T13:05:13+00:00"
-        },
-        {
-            "name": "phrity/util-errorhandler",
-            "version": "1.2.0",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/sirn-se/phrity-util-errorhandler.git",
-                "reference": "61813189e4525fde4aecad3df849829d526d6f76"
-            },
-            "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/sirn-se/phrity-util-errorhandler/zipball/61813189e4525fde4aecad3df849829d526d6f76",
-                "reference": "61813189e4525fde4aecad3df849829d526d6f76",
-                "shasum": ""
-            },
-            "require": {
-                "php": "^8.1"
-            },
-            "require-dev": {
-                "php-coveralls/php-coveralls": "^2.0",
-                "phpstan/phpstan": "^2.0",
-                "phpunit/phpunit": "^10.0 | ^11.0  | ^12.0",
-                "squizlabs/php_codesniffer": "^3.5"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "Phrity\\Util\\": "src/"
-                }
-            },
-            "notification-url": "https://packagist.org/downloads/",
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Sören Jensen",
-                    "email": "sirn@sirn.se",
-                    "homepage": "https://phrity.sirn.se"
-                }
-            ],
-            "description": "Inline error handler; catch and resolve errors for code block.",
-            "homepage": "https://phrity.sirn.se/util-errorhandler",
-            "keywords": [
-                "error",
-                "warning"
-            ],
-            "support": {
-                "issues": "https://github.com/sirn-se/phrity-util-errorhandler/issues",
-                "source": "https://github.com/sirn-se/phrity-util-errorhandler/tree/1.2.0"
-            },
-            "time": "2025-05-26T18:26:51+00:00"
-        },
-        {
-            "name": "phrity/websocket",
-            "version": "3.5.0",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/sirn-se/websocket-php.git",
-                "reference": "df3b4dbe3a8741159ae5cb5735476ebc4813d909"
-            },
-            "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/sirn-se/websocket-php/zipball/df3b4dbe3a8741159ae5cb5735476ebc4813d909",
-                "reference": "df3b4dbe3a8741159ae5cb5735476ebc4813d909",
-                "shasum": ""
-            },
-            "require": {
-                "php": "^8.1",
-                "phrity/net-stream": "^2.3",
-                "phrity/net-uri": "^2.1",
-                "psr/http-message": "^1.1 | ^2.0",
-                "psr/log": "^1.0 | ^2.0 | ^3.0"
-            },
-            "require-dev": {
-                "php-coveralls/php-coveralls": "^2.0",
-                "phpstan/phpstan": "^2.0",
-                "phpunit/phpunit": "^10.0 | ^11.0 | ^12.0",
-                "phrity/net-mock": "^2.3",
-                "phrity/util-errorhandler": "^1.1",
-                "squizlabs/php_codesniffer": "^3.5"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "WebSocket\\": "src/"
-                }
-            },
-            "notification-url": "https://packagist.org/downloads/",
-            "license": [
-                "ISC"
-            ],
-            "authors": [
-                {
-                    "name": "Fredrik Liljegren"
-                },
-                {
-                    "name": "Sören Jensen",
-                    "email": "sirn@sirn.se",
-                    "homepage": "https://phrity.sirn.se"
-                }
-            ],
-            "description": "WebSocket client and server",
-            "homepage": "https://phrity.sirn.se/websocket",
-            "keywords": [
-                "client",
-                "server",
-                "websocket"
-            ],
-            "support": {
-                "issues": "https://github.com/sirn-se/websocket-php/issues",
-                "source": "https://github.com/sirn-se/websocket-php/tree/3.5.0"
-            },
-            "time": "2025-05-23T13:13:41+00:00"
         },
         {
             "name": "psr/http-factory",
@@ -1281,52 +988,6 @@
             "time": "2024-06-11T12:45:25+00:00"
         },
         {
-            "name": "rndwiga/deriv_apis",
-            "version": "0.01",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/Rndwiga/deriv-sdk.git",
-                "reference": "46ff1436ababc1ffb9da975f39f367c9982c1018"
-            },
-            "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/Rndwiga/deriv-sdk/zipball/46ff1436ababc1ffb9da975f39f367c9982c1018",
-                "reference": "46ff1436ababc1ffb9da975f39f367c9982c1018",
-                "shasum": ""
-            },
-            "require": {
-                "ext-json": "*",
-                "php": "^8.1",
-                "phrity/websocket": "^3.5"
-            },
-            "require-dev": {
-                "mockery/mockery": "2.0.x-dev",
-                "pestphp/pest": "3.x-dev"
-            },
-            "type": "project",
-            "autoload": {
-                "psr-4": {
-                    "Rndwiga\\DerivApis\\": "src/"
-                }
-            },
-            "notification-url": "https://packagist.org/downloads/",
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Raphael Ndwiga",
-                    "email": "raphael@raphaelndwiga.africa"
-                }
-            ],
-            "description": "Deriv Websocket API SDK",
-            "support": {
-                "issues": "https://github.com/Rndwiga/deriv-sdk/issues",
-                "source": "https://github.com/Rndwiga/deriv-sdk/tree/0.01"
-            },
-            "time": "2025-06-29T18:06:00+00:00"
-        },
-        {
             "name": "symfony/polyfill-php80",
             "version": "v1.32.0",
             "source": {
@@ -1405,6 +1066,55 @@
                 }
             ],
             "time": "2025-01-02T08:10:11+00:00"
+        },
+        {
+            "name": "textalk/websocket",
+            "version": "1.5.8",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/Textalk/websocket-php.git",
+                "reference": "d05dbaa97500176447ffb1f1800573f23085ab13"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/Textalk/websocket-php/zipball/d05dbaa97500176447ffb1f1800573f23085ab13",
+                "reference": "d05dbaa97500176447ffb1f1800573f23085ab13",
+                "shasum": ""
+            },
+            "require": {
+                "php": "^7.2 | ^8.0",
+                "psr/log": "^1 | ^2 | ^3"
+            },
+            "require-dev": {
+                "php-coveralls/php-coveralls": "^2.0",
+                "phpunit/phpunit": "^8.0|^9.0",
+                "squizlabs/php_codesniffer": "^3.5"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "WebSocket\\": "lib"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "ISC"
+            ],
+            "authors": [
+                {
+                    "name": "Fredrik Liljegren"
+                },
+                {
+                    "name": "Sören Jensen",
+                    "email": "soren@abicart.se"
+                }
+            ],
+            "description": "WebSocket client and server",
+            "support": {
+                "issues": "https://github.com/Textalk/websocket-php/issues",
+                "source": "https://github.com/Textalk/websocket-php/tree/1.5.8"
+            },
+            "time": "2022-04-26T06:28:24+00:00"
         }
     ],
     "packages-dev": [],
