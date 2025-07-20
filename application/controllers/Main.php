@@ -805,20 +805,44 @@ class Main extends CI_Controller {
     */
     
     // MANUAL TRANSFER MODE - Update DB and notify user
-    // Generate a mock transaction ID for manual processing
-    $mock_transaction_id = 'STEPDEPO_' . $transaction_number . '_' . date('YmdHis');
+    // Only update existing columns in the table
     
-    // Update request status to processed
+    // Debug: Log the data being updated
+    error_log('DEBUG: Updating table: ' . $table);
+    error_log('DEBUG: Condition: ' . print_r($condition, true));
+    
+    // Update request status to processed - only use existing columns
     $data = array(
         'status' => 1,
-        'deposited' => $amount,
-        'deriv_transaction_id' => $mock_transaction_id,
-        'processed_date' => $this->date
+        'deposited' => $amount
     );
     
+    error_log('DEBUG: Data: ' . print_r($data, true));
+    
+    // Try the update and capture any errors
     $update = $this->Operations->UpdateData($table, $condition, $data);
     
-    if ($update === TRUE) {
+    // Debug: Check what UpdateData returned
+    error_log('DEBUG: Update result: ' . print_r($update, true));
+    
+    // Alternative update method if the first one fails
+    if ($update !== TRUE) {
+        error_log('DEBUG: First update failed, trying alternative method');
+        
+        // Try using transaction_id as string
+        $condition_alt = array('transaction_id' => (string)$request_id);
+        $update = $this->Operations->UpdateData($table, $condition_alt, $data);
+        
+        if ($update !== TRUE) {
+            // Try direct database update
+            $this->db->where('transaction_id', $request_id);
+            $update = $this->db->update($table, $data);
+            
+            error_log('DEBUG: Direct DB update result: ' . print_r($update, true));
+        }
+    }
+    
+    if ($update === TRUE || $update == 1 || $update) {
         // Get user details
         $condition1 = array('wallet_id' => $wallet_id);
         $searchuser = $this->Operations->SearchByCondition('customers', $condition1);
@@ -832,7 +856,7 @@ class Main extends CI_Controller {
         $sms = $this->Operations->sendSMS($phone, $message);
         
         // Send confirmation to admin
-        $adminMessage = "AMOUNT CREDITED TO USER: $" . number_format($amount, 2) . " USD to " . $cr_number . " (Txn: " . $transaction_number . ") - Manual transfer";
+        $adminMessage = "SUCCESS: Deposit of $" . number_format($amount, 2) . " USD to Deriv account " . $cr_number . " has been marked as processed. Transaction Number: " . $transaction_number . ". Please confirm the funds have been credited to the user's account.";
         $adminPhones = ['0703416091', '0710964626', '0726627688'];
         
         foreach ($adminPhones as $adminPhone) {
@@ -842,7 +866,6 @@ class Main extends CI_Controller {
         $response['status'] = 'success';
         $response['message'] = $message;
         $response['data'] = array(
-            'transaction_id' => $mock_transaction_id,
             'amount_transferred' => $amount,
             'currency' => 'USD',
             'recipient_account' => $cr_number,
@@ -850,8 +873,13 @@ class Main extends CI_Controller {
         );
         
     } else {
+        // Log the error for debugging
+        error_log('DEBUG: Database update failed completely');
+        error_log('DEBUG: Last query: ' . $this->db->last_query());
+        error_log('DEBUG: DB error: ' . $this->db->error()['message']);
+        
         $response['status'] = 'error';
-        $response['message'] = 'Database update failed. Please try again.';
+        $response['message'] = 'Database update failed. Please try again. Error: ' . $this->db->error()['message'];
         $response['data'] = null;
     }
     
