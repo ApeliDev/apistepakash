@@ -713,143 +713,150 @@ class Main extends CI_Controller {
 
 	
 	public function process_deporequest()
-    {
-        $response = array();
+{
+    $response = array();
+    
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        $response['status'] = 'error';
+        $response['message'] = 'Invalid request method. Only POST requests are allowed.';
+        $response['data'] = null;
+        echo json_encode($response);
+        return;
+    }
+    
+    $request_id = $this->input->post('request_id');
+    
+    if (empty($request_id)) {
+        $response['status'] = 'error';
+        $response['message'] = 'Request ID is empty.';
+        $response['data'] = null;
+        echo json_encode($response);
+        return;
+    }
+    
+    $table = 'deriv_deposit_request';
+    $condition = array('transaction_id' => $request_id);
+    $search = $this->Operations->SearchByCondition($table, $condition);
+    
+    if (empty($search)) {
+        $response['status'] = 'error';
+        $response['message'] = 'Request not found.';
+        $response['data'] = null;
+        echo json_encode($response);
+        return;
+    }
+    
+    // Check if already processed
+    if ($search[0]['status'] == 1) {
+        $response['status'] = 'error';
+        $response['message'] = 'Request already processed.';
+        $response['data'] = null;
+        echo json_encode($response);
+        return;
+    }
+    
+    $amount = $search[0]['amount'];
+    $cr_number = $search[0]['cr_number'];
+    $wallet_id = $search[0]['wallet_id'];
+    $transaction_number = $search[0]['transaction_number'];
+    
+    // DERIV TRANSFER TEMPORARILY DISABLED - COMMENTED OUT
+    /*
+    // Check agent balance first
+    $balanceCheck = $this->checkAgentBalance();
+    
+    if (!$balanceCheck['success']) {
+        $response['status'] = 'error';
+        $response['message'] = 'Failed to check agent balance: ' . $balanceCheck['error'];
+        $response['data'] = null;
+        echo json_encode($response);
+        return;
+    }
+    
+    // Check if agent has sufficient balance
+    if ($balanceCheck['balance'] < $amount) {
+        $response['status'] = 'error';
+        $response['message'] = 'Insufficient agent balance. Available: $' . number_format($balanceCheck['balance'], 2) . ', Required: $' . number_format($amount, 2);
+        $response['data'] = null;
         
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            $response['status'] = 'error';
-            $response['message'] = 'Invalid request method. Only POST requests are allowed.';
-            $response['data'] = null;
-            echo json_encode($response);
-            return;
-        }
+        // Notify admin about insufficient balance
+        $adminMessage = "ALERT: Insufficient agent balance for transfer. Available: $" . number_format($balanceCheck['balance'], 2) . ", Required: $" . number_format($amount, 2) . " for transaction " . $transaction_number;
+        $adminPhones = ['0703416091', '0710964626', '0726627688'];
         
-        $request_id = $this->input->post('request_id');
-        
-        if (empty($request_id)) {
-            $response['status'] = 'error';
-            $response['message'] = 'Request ID is empty.';
-            $response['data'] = null;
-            echo json_encode($response);
-            return;
-        }
-        
-        $table = 'deriv_deposit_request';
-        $condition = array('transaction_id' => $request_id);
-        $search = $this->Operations->SearchByCondition($table, $condition);
-        
-        if (empty($search)) {
-            $response['status'] = 'error';
-            $response['message'] = 'Request not found.';
-            $response['data'] = null;
-            echo json_encode($response);
-            return;
-        }
-        
-        // Check if already processed
-        if ($search[0]['status'] == 1) {
-            $response['status'] = 'error';
-            $response['message'] = 'Request already processed.';
-            $response['data'] = null;
-            echo json_encode($response);
-            return;
-        }
-        
-        $amount = $search[0]['amount'];
-        $cr_number = $search[0]['cr_number'];
-        $wallet_id = $search[0]['wallet_id'];
-        $transaction_number = $search[0]['transaction_number'];
-        
-        // Check agent balance first
-        $balanceCheck = $this->checkAgentBalance();
-        
-        if (!$balanceCheck['success']) {
-            $response['status'] = 'error';
-            $response['message'] = 'Failed to check agent balance: ' . $balanceCheck['error'];
-            $response['data'] = null;
-            echo json_encode($response);
-            return;
-        }
-        
-        // Check if agent has sufficient balance
-        if ($balanceCheck['balance'] < $amount) {
-            $response['status'] = 'error';
-            $response['message'] = 'Insufficient agent balance. Available: $' . number_format($balanceCheck['balance'], 2) . ', Required: $' . number_format($amount, 2);
-            $response['data'] = null;
-            
-            // Notify admin about insufficient balance
-            $adminMessage = "ALERT: Insufficient agent balance for transfer. Available: $" . number_format($balanceCheck['balance'], 2) . ", Required: $" . number_format($amount, 2) . " for transaction " . $transaction_number;
-            $adminPhones = ['0703416091', '0710964626', '0726627688'];
-            
-            foreach ($adminPhones as $phone) {
-                $this->Operations->sendSMS($phone, $adminMessage);
-            }
-            
-            echo json_encode($response);
-            return;
-        }
-        
-        // Perform the actual transfer to Deriv
-        $transferDescription = "Deposit to account " . $cr_number . " - Txn: " . $transaction_number;
-        $transferResult = $this->performDerivTransfer($amount, 'USD', $cr_number, $transferDescription, $request_id);
-        
-        if (!$transferResult['success']) {
-            $response['status'] = 'error';
-            $response['message'] = 'Transfer to Deriv failed: ' . $transferResult['error'];
-            $response['data'] = null;
-            echo json_encode($response);
-            return;
-        }
-        
-        // Update request status to processed
-        $data = array(
-            'status' => 1,
-            'deposited' => $amount,
-            'deriv_transaction_id' => $transferResult['transaction_id'],
-            'processed_date' => $this->date
-        );
-        
-        $update = $this->Operations->UpdateData($table, $condition, $data);
-        
-        if ($update === TRUE) {
-            // Get user details
-            $condition1 = array('wallet_id' => $wallet_id);
-            $searchuser = $this->Operations->SearchByCondition('customers', $condition1);
-            $mobile = $searchuser[0]['phone'];
-            $phone = preg_replace('/^(?:\+?254|0)?/', '254', $mobile);
-            
-            // Send success message to user
-            $message = $transaction_number . ' processed successfully. $' . number_format($amount, 2) . ' USD has been deposited to your Deriv account ' . $cr_number . '. Transaction ID: ' . $transferResult['transaction_id'];
-            
-            // Send SMS to user
-            $sms = $this->Operations->sendSMS($phone, $message);
-            
-            // Send confirmation to admin
-            $adminMessage = "SUCCESS: Deposit processed - $" . number_format($amount, 2) . " USD transferred to " . $cr_number . " (Txn: " . $transaction_number . ")";
-            $adminPhones = ['0703416091'];
-            
-            foreach ($adminPhones as $adminPhone) {
-                $this->Operations->sendSMS($adminPhone, $adminMessage);
-            }
-            
-            $response['status'] = 'success';
-            $response['message'] = $message;
-            $response['data'] = array(
-                'transaction_id' => $transferResult['transaction_id'],
-                'client_full_name' => $transferResult['client_to_full_name'],
-                'amount_transferred' => $amount,
-                'currency' => 'USD',
-                'recipient_account' => $cr_number
-            );
-            
-        } else {
-            $response['status'] = 'error';
-            $response['message'] = 'Database update failed after successful transfer. Please contact support.';
-            $response['data'] = null;
+        foreach ($adminPhones as $phone) {
+            $this->Operations->sendSMS($phone, $adminMessage);
         }
         
         echo json_encode($response);
+        return;
     }
+    
+    // Perform the actual transfer to Deriv
+    $transferDescription = "Deposit to account " . $cr_number . " - Txn: " . $transaction_number;
+    $transferResult = $this->performDerivTransfer($amount, 'USD', $cr_number, $transferDescription, $request_id);
+    
+    if (!$transferResult['success']) {
+        $response['status'] = 'error';
+        $response['message'] = 'Transfer to Deriv failed: ' . $transferResult['error'];
+        $response['data'] = null;
+        echo json_encode($response);
+        return;
+    }
+    */
+    
+    // MANUAL TRANSFER MODE - Update DB and notify user
+    // Generate a mock transaction ID for manual processing
+    $mock_transaction_id = 'STEPDEPO_' . $transaction_number . '_' . date('YmdHis');
+    
+    // Update request status to processed
+    $data = array(
+        'status' => 1,
+        'deposited' => $amount,
+        'deriv_transaction_id' => $mock_transaction_id,
+        'processed_date' => $this->date
+    );
+    
+    $update = $this->Operations->UpdateData($table, $condition, $data);
+    
+    if ($update === TRUE) {
+        // Get user details
+        $condition1 = array('wallet_id' => $wallet_id);
+        $searchuser = $this->Operations->SearchByCondition('customers', $condition1);
+        $mobile = $searchuser[0]['phone'];
+        $phone = preg_replace('/^(?:\+?254|0)?/', '254', $mobile);
+        
+        // Send success message to user
+        $message = $transaction_number . ' processed successfully. $' . number_format($amount, 2) . ' USD has been credited to your Deriv account ' . $cr_number . '.';
+        
+        // Send SMS to user
+        $sms = $this->Operations->sendSMS($phone, $message);
+        
+        // Send confirmation to admin
+        $adminMessage = "AMOUNT CREDITED TO USER: $" . number_format($amount, 2) . " USD to " . $cr_number . " (Txn: " . $transaction_number . ") - Manual transfer";
+        $adminPhones = ['0703416091', '0710964626', '0726627688'];
+        
+        foreach ($adminPhones as $adminPhone) {
+            $this->Operations->sendSMS($adminPhone, $adminMessage);
+        }
+        
+        $response['status'] = 'success';
+        $response['message'] = $message;
+        $response['data'] = array(
+            'transaction_id' => $mock_transaction_id,
+            'amount_transferred' => $amount,
+            'currency' => 'USD',
+            'recipient_account' => $cr_number,
+            'manual_processing' => true
+        );
+        
+    } else {
+        $response['status'] = 'error';
+        $response['message'] = 'Database update failed. Please try again.';
+        $response['data'] = null;
+    }
+    
+    echo json_encode($response);
+}
 
 
     public function getAgentBalance()
