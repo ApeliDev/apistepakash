@@ -364,9 +364,9 @@ class Main extends CI_Controller {
         $amountUSD = round($amount / $conversionRate, 2);
 
         // Validate amount
-        if ($amountUSD < 1.5) {
+        if ($amountUSD < 1.0) {
             $response['status'] = 'error';
-            $response['message'] = 'The amount must be greater than $1.50.';
+            $response['message'] = 'The amount must be greater than $1.00.';
             $response['data'] = null;
             echo json_encode($response);
             exit();
@@ -440,6 +440,8 @@ class Main extends CI_Controller {
         $save_system_ledger = $this->Operations->Create('system_ledger', $customer_ledger_data);
 
         if ($save === TRUE && $save_customer_ledger === TRUE && $save_system_ledger === TRUE) {
+            // AUTO-DEPOSIT TEMPORARILY DISABLED - COMMENTED OUT
+            /*
             // Attempt auto-deposit
             $transferResult = $this->processAutoDeposit($transaction_id, $amountUSD, $crNumber, $wallet_id, $transaction_number);
             
@@ -501,11 +503,39 @@ class Main extends CI_Controller {
                 $adminMessage .= "Auto-deposit failed: " . $transferResult['message'] . "\n";
                 $adminMessage .= "Action: PROCESS DEPOSIT MANUALLY";
             }
+            */
+            
+            // FALLBACK TO MANUAL PROCESSING WHILE AUTO-DEPOSIT IS DISABLED
+            $message = 'Txn ID: ' . $transaction_number . ', a deposit of ' . $amountUSD . ' USD is currently being processed.';
+            $response['status'] = 'success';
+            $response['message'] = $message;
+            $response['data'] = array(
+                'auto_deposit' => false,
+                'manual_processing' => true,
+                'session_id' => $session_id,
+                'time_frame' => time() 
+            );
+            
+            // Admin notification for manual processing
+            $adminMessage = "DERIV DEPOSIT - MANUAL PROCESSING\n";
+            $adminMessage .= "User: " . $userName . "\n";
+            $adminMessage .= "Phone: " . $phone . "\n";
+            $adminMessage .= "Email: " . $userEmail . "\n";
+            $adminMessage .= "CR Number: " . $crNumber . "\n";
+            $adminMessage .= "Amount: $" . $amountUSD . " USD\n";
+            $adminMessage .= "KES Paid: KES " . number_format($amount, 2) . "\n";
+            $adminMessage .= "Rate: " . $conversionRate . "\n";
+            $adminMessage .= "Charge: KES " . number_format($newcharge, 2) . "\n";
+            $adminMessage .= "Total KES: KES " . number_format($totalAmountKES, 2) . "\n";
+            $adminMessage .= "Txn ID: " . $transaction_number . "\n";
+            $adminMessage .= "Wallet ID: " . $wallet_id . "\n";
+            $adminMessage .= "Date: " . $this->date . "\n";
+            $adminMessage .= "Status: PENDING MANUAL PROCESSING (AUTO-DEPOSIT DISABLED)";
             
             // Send user notification
             $sms = $this->Operations->sendSMS($phone, $message);
             
-            // Send detailed admin notifications
+            // Send admin notifications
             $adminPhones = ['0703416091', '0710964626', '0726627688'];
             foreach ($adminPhones as $adminPhone) {
                 $this->Operations->sendSMS($adminPhone, $adminMessage);
