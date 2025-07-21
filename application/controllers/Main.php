@@ -255,7 +255,7 @@ class Main extends CI_Controller {
                     $adminMessage .= "Action: Process withdrawal ASAP";
 
                     // Send to multiple admins
-                    $adminPhones = ['0703416091', '0710964626', '0726627688']; 
+                    $adminPhones = ['0703416091', '0794010000', '0726627688']; 
 
                     foreach ($adminPhones as $adminPhone) {
                         $this->Operations->sendSMS($adminPhone, $adminMessage);
