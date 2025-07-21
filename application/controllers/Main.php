@@ -568,18 +568,6 @@ class Main extends CI_Controller {
         exit();
     }
 
-    // MAINTENANCE MODE - Return message without processing
-    $response['status'] = 'maintenance';
-    $response['message'] = 'We are working on Deriv transfers. You will be notified when done.';
-    $response['data'] = array(
-        'maintenance_mode' => true,
-        'estimated_completion' => 'We will notify you once the service is restored'
-    );
-    echo json_encode($response);
-    exit();
-
-    // ALL ORIGINAL CODE BELOW IS COMMENTED OUT DURING MAINTENANCE
-    /*
     // Fetch inputs
     $crNumber = $this->input->post('crNumber');
     $crNumber = str_replace(' ', '', $crNumber);
@@ -631,6 +619,26 @@ class Main extends CI_Controller {
         echo json_encode($response);
         exit();
     }
+
+    // Update session timestamp to keep user logged in
+    $this->Operations->UpdateData('login_session', 
+        array('session_id' => $session_id), 
+        array('created_on' => $this->date)
+    );
+
+    // MAINTENANCE MODE - Return message after session validation
+    $response['status'] = 'maintenance';
+    $response['message'] = 'We are working on Deriv transfers. You will be notified when done.';
+    $response['data'] = array(
+        'maintenance_mode' => true,
+        'session_id' => $session_id,
+        'estimated_completion' => 'We will notify you once the service is restored'
+    );
+    echo json_encode($response);
+    exit();
+
+    // ALL PROCESSING CODE BELOW IS COMMENTED OUT DURING MAINTENANCE
+    /*
 
     $wallet_id = $checksession[0]['wallet_id'];
     $summary = $this->Operations->customer_transection_summary($wallet_id);
