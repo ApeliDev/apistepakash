@@ -555,7 +555,7 @@ class Main extends CI_Controller {
     //     echo json_encode($response);
     // }
 
-    public function DepositToDeriv() 
+   public function DepositToDeriv() 
 {
     $response = array();
     header('Content-Type: application/json');
@@ -568,6 +568,18 @@ class Main extends CI_Controller {
         exit();
     }
 
+    // DERIV TRANSFERS TEMPORARILY DISABLED - MAINTENANCE MODE
+    $response['status'] = 'maintenance';
+    $response['message'] = 'We are working on Deriv transfers. You will be notified when done.';
+    $response['data'] = array(
+        'maintenance_mode' => true,
+        'estimated_completion' => 'Updates in progress'
+    );
+    echo json_encode($response);
+    exit();
+
+    // ===== ORIGINAL CODE BELOW (COMMENTED OUT FOR MAINTENANCE) =====
+    /*
     // Fetch inputs
     $crNumber = $this->input->post('crNumber');
     $crNumber = str_replace(' ', '', $crNumber);
@@ -619,26 +631,6 @@ class Main extends CI_Controller {
         echo json_encode($response);
         exit();
     }
-
-    // Update session timestamp to keep user logged in
-    $this->Operations->UpdateData('login_session', 
-        array('session_id' => $session_id), 
-        array('created_on' => $this->date)
-    );
-
-    // MAINTENANCE MODE - Return message after session validation
-    $response['status'] = 'maintenance';
-    $response['message'] = 'We are working on Deriv transfers. You will be notified when done.';
-    $response['data'] = array(
-        'maintenance_mode' => true,
-        'session_id' => $session_id,
-        'estimated_completion' => 'We will notify you once the service is restored'
-    );
-    echo json_encode($response);
-    exit();
-
-    // ALL PROCESSING CODE BELOW IS COMMENTED OUT DURING MAINTENANCE
-    /*
 
     $wallet_id = $checksession[0]['wallet_id'];
     $summary = $this->Operations->customer_transection_summary($wallet_id);
@@ -733,6 +725,9 @@ class Main extends CI_Controller {
     $save_system_ledger = $this->Operations->Create('system_ledger', $customer_ledger_data);
 
     if ($save === TRUE && $save_customer_ledger === TRUE && $save_system_ledger === TRUE) {
+        // AUTO-DEPOSIT TEMPORARILY DISABLED - COMMENTED OUT
+        // [Previous auto-deposit code remains commented out]
+        
         // FALLBACK TO MANUAL PROCESSING WHILE AUTO-DEPOSIT IS DISABLED
         $message = 'Txn ID: ' . $transaction_number . ', a deposit of ' . $amountUSD . ' USD is currently being processed.';
         $response['status'] = 'success';
