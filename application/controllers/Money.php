@@ -272,12 +272,24 @@ class Money extends CI_Controller {
                         $condition1 = array('wallet_id' => $wallet_id);
                         $searchuser1 = $this->Operations->SearchByCondition('customers', $condition1);
                         $mobile = $searchuser1[0]['phone'];
-                        $customer_name = isset($searchuser1[0]['name']) ? $searchuser1[0]['name'] : 'Customer';
-                        
-                        // Format the transaction date for display
+                        $full_name = isset($searchuser1[0]['fullname']) ? $searchuser1[0]['fullname'] : 'Customer';
+
+                        // Extract only the first name from full name
+                        $name_parts = explode(' ', trim($full_name));
+                        $customer_display_name = 'Customer';
+                        if (count($name_parts) >= 1 && !empty($name_parts[0])) {
+                            $customer_display_name = $name_parts[0];
+                        }
+
+                        // Format the transaction date for display (dd/mm/yyyy HH:mm)
                         $formatted_date = date('d/m/Y H:i', strtotime($this->date));
-                        $message = "Hi $customer_name, your STEPAKASH wallet has been credited with KES " . number_format($Amount, 2) . " (Ref: $MpesaReceiptNumber) on $formatted_date. New balance: KES " . number_format($current_balance, 2) . ".";
-                        
+
+                        // Create the SMS message with your specified format
+                        $message = "Dear $customer_display_name, your StepaKash wallet has been credited with KES " . 
+                                number_format($Amount, 2) . " (Ref: $MpesaReceiptNumber) on $formatted_date. " .
+                                "New balance: KES " . number_format($current_balance, 2) . ". " .
+                                "Money on The Go with StepaKash.";
+
                         // Send SMS notification
                         $sms = $this->Operations->sendSMS($mobile, $message);
                         
@@ -506,6 +518,18 @@ class Money extends CI_Controller {
                     $mobile = $searchuser1[0]['phone'];
                     $customer_name = isset($searchuser1[0]['name']) ? $searchuser1[0]['name'] : 'Customer';
                     
+                    // Extract first two names from customer name
+                    $name_parts = explode(' ', trim($customer_name));
+                    $first_two_names = '';
+                    
+                    if ($customer_name && $customer_name !== 'Customer') {
+                        $first_two_names = count($name_parts) >= 2 ? 
+                            $name_parts[0] . ' ' . $name_parts[1] : 
+                            $customer_name;
+                    } else {
+                        $first_two_names = 'Customer';
+                    }
+                    
                     // Calculate current balance after withdrawal
                     $balance_condition = array('wallet_id' => $wallet_id, 'status' => 1);
                     $all_transactions = $this->Operations->SearchByCondition('customer_ledger', $balance_condition);
@@ -521,9 +545,13 @@ class Money extends CI_Controller {
                         }
                     }
                     
-                    // Format the transaction date for display
+                    // Format the transaction date for display (dd/mm/yyyy HH:mm)
                     $formatted_date = date('d/m/Y H:i', strtotime($this->date));
-                    $message = "Hi $customer_name, KES " . number_format($Amount, 2) . " has been withdrawn from your STEPAKASH wallet (Ref: $MpesaReceiptNumber) on $formatted_date. New balance: KES " . number_format($current_balance, 2) . ".";
+                    
+                    // Create the new message format
+                    $message = "Dear $first_two_names, your StepaKash wallet has been debited with KES " . 
+                               number_format($Amount, 2) . " (Ref: $MpesaReceiptNumber) on $formatted_date. " .
+                               "New balance: KES " . number_format($current_balance, 2) . ". Money on The Go with StepaKash.";
                     
                     // Send SMS notification
                     $sms = $this->Operations->sendSMS($mobile, $message);
@@ -541,6 +569,7 @@ class Money extends CI_Controller {
                         "Amount: KES $Amount\n" .
                         "Wallet: $wallet_id\n" .
                         "Customer: $customer_name\n" .
+                        "First Two Names: $first_two_names\n" .
                         "Mobile: $mobile\n" .
                         "New Balance: KES $current_balance\n" .
                         "SMS Sent: " . ($sms ? 'Yes' : 'No'));
