@@ -392,20 +392,11 @@ class Main extends CI_Controller {
         $condition1 = array('wallet_id' => $wallet_id);
         $searchUser = $this->Operations->SearchByCondition('customers', $condition1);
         $phone = $searchUser[0]['phone'];
-        $fullName = $searchUser[0]['name'] ?? $searchUser[0]['fullname'] ?? 'N/A';
+        $userName = $searchUser[0]['name'] ?? $searchUser[0]['fullname'] ?? 'N/A';
         $userEmail = $searchUser[0]['email'] ?? 'N/A';
-        
-        // Extract first 2 names for SMS
-        $nameWords = explode(' ', trim($fullName));
-        $firstName = isset($nameWords[0]) ? $nameWords[0] : '';
-        $secondName = isset($nameWords[1]) ? $nameWords[1] : '';
-        $customerShortName = trim($firstName . ' ' . $secondName);
 
-        // Generate unique transaction ID for deposit request
-        $unique_deposit_transaction_id = $this->generateUniqueDepositTransactionId();
-        
         // Prepare transaction data
-        $transaction_number = $this->transaction_number; // Keep original for ledger
+        $transaction_number = $this->transaction_number;
         $mycharge = ($buyrate[0]['kes'] - $boughtbuy);
         $newcharge = (float)$mycharge * $amountUSD;
 
@@ -414,7 +405,6 @@ class Main extends CI_Controller {
         $data = array(
             'transaction_id' => $transaction_id,
             'transaction_number' => $transaction_number,
-            'deposit_transaction_id' => $unique_deposit_transaction_id, // Unique ID for this deposit
             'wallet_id' => $wallet_id,
             'cr_number' => $crNumber,
             'amount' => $amountUSD,
@@ -477,7 +467,7 @@ class Main extends CI_Controller {
                 
                 // Detailed admin notification for successful auto-deposit
                 $adminMessage = "DERIV DEPOSIT - AUTO SUCCESS\n";
-                $adminMessage .= "User: " . $fullName . "\n";
+                $adminMessage .= "User: " . $userName . "\n";
                 $adminMessage .= "Phone: " . $phone . "\n";
                 $adminMessage .= "Email: " . $userEmail . "\n";
                 $adminMessage .= "CR Number: " . $crNumber . "\n";
@@ -494,9 +484,9 @@ class Main extends CI_Controller {
                 
             } else {
                 // Auto-deposit failed - fall back to manual processing
-                $displayMessage = 'Your deposit request has been submitted successfully and is being processed. You will receive an SMS confirmation shortly.';
+                $message = 'Txn ID: ' . $transaction_number . ', a deposit of ' . $amountUSD . ' USD is currently being processed.';
                 $response['status'] = 'success';
-                $response['message'] = $displayMessage;
+                $response['message'] = $message;
                 $response['data'] = array(
                     'auto_deposit' => false,
                     'manual_processing' => true,
@@ -506,7 +496,7 @@ class Main extends CI_Controller {
                 
                 // Detailed admin notification for manual processing
                 $adminMessage = "DERIV DEPOSIT - MANUAL REQUIRED\n";
-                $adminMessage .= "User: " . $fullName . "\n";
+                $adminMessage .= "User: " . $userName . "\n";
                 $adminMessage .= "Phone: " . $phone . "\n";
                 $adminMessage .= "Email: " . $userEmail . "\n";
                 $adminMessage .= "CR Number: " . $crNumber . "\n";
@@ -524,9 +514,9 @@ class Main extends CI_Controller {
             */
             
             // FALLBACK TO MANUAL PROCESSING WHILE AUTO-DEPOSIT IS DISABLED
-            $displayMessage = 'Your deposit request has been submitted successfully and is being processed. You will receive an SMS confirmation shortly.';
+            $message = 'Txn ID: ' . $transaction_number . ', a deposit of ' . $amountUSD . ' USD is currently being processed.';
             $response['status'] = 'success';
-            $response['message'] = $displayMessage;
+            $response['message'] = $message;
             $response['data'] = array(
                 'auto_deposit' => false,
                 'manual_processing' => true,
@@ -534,12 +524,9 @@ class Main extends CI_Controller {
                 'time_frame' => time() 
             );
             
-            // SMS message for customer (different from display message)
-            $smsMessage = "Dear Customer " . $customerShortName . ", your deposit request of $" . $amountUSD . " USD (KES " . number_format($amount, 2) . ") to Deriv account (CR" . $crNumber . ") has been received and is being processed. Ref: " . $unique_deposit_transaction_id . ". You'll receive confirmation once complete.";
-            
             // Admin notification for manual processing
             $adminMessage = "DERIV DEPOSIT - MANUAL PROCESSING\n";
-            $adminMessage .= "User: " . $fullName . "\n";
+            $adminMessage .= "User: " . $userName . "\n";
             $adminMessage .= "Phone: " . $phone . "\n";
             $adminMessage .= "Email: " . $userEmail . "\n";
             $adminMessage .= "CR Number: " . $crNumber . "\n";
@@ -548,14 +535,13 @@ class Main extends CI_Controller {
             $adminMessage .= "Rate: " . $conversionRate . "\n";
             $adminMessage .= "Charge: KES " . number_format($newcharge, 2) . "\n";
             $adminMessage .= "Total KES: KES " . number_format($totalAmountKES, 2) . "\n";
-            $adminMessage .= "Ledger Txn ID: " . $transaction_number . "\n";
-            $adminMessage .= "Deposit Ref: " . $unique_deposit_transaction_id . "\n";
+            $adminMessage .= "Txn ID: " . $transaction_number . "\n";
             $adminMessage .= "Wallet ID: " . $wallet_id . "\n";
             $adminMessage .= "Date: " . $this->date . "\n";
             $adminMessage .= "Status: PENDING MANUAL PROCESSING (AUTO-DEPOSIT DISABLED)";
             
-            // Send user notification with SMS message
-            $sms = $this->Operations->sendSMS($phone, $smsMessage);
+            // Send user notification
+            $sms = $this->Operations->sendSMS($phone, $message);
             
             // Send admin notifications
             $adminPhones = ['0703416091', '0794010000', '0726627688'];
@@ -576,7 +562,6 @@ class Main extends CI_Controller {
 
         echo json_encode($response);
     }
-    
     private function processAutoDeposit($transaction_id, $amount, $crNumber, $wallet_id, $transaction_number)
     {
         // 1. Check agent balance first
