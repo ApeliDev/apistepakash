@@ -514,7 +514,15 @@ class Main extends CI_Controller {
             */
             
             // FALLBACK TO MANUAL PROCESSING WHILE AUTO-DEPOSIT IS DISABLED
+            $customer_name_parts = explode(" ", $userName);
+            $first_two_names = $customer_name_parts[0] . (isset($customer_name_parts[1]) ? ' ' . $customer_name_parts[1] : '');
+
+            // Message to show user on-screen
             $message = 'Txn ID: ' . $transaction_number . ', a deposit of ' . $amountUSD . ' USD is currently being processed.';
+
+            // Message to send to user via SMS
+            $sms_message = "Dear $first_two_names, your deposit request of \${$amountUSD} USD (KES " . number_format($amount, 2) . ") to Deriv account (CR$crNumber) has been received and is being processed. Ref: $transaction_number. You’ll receive confirmation once complete.";
+
             $response['status'] = 'success';
             $response['message'] = $message;
             $response['data'] = array(
@@ -523,6 +531,7 @@ class Main extends CI_Controller {
                 'session_id' => $session_id,
                 'time_frame' => time() 
             );
+            
             
             // Admin notification for manual processing
             $adminMessage = "DERIV DEPOSIT - MANUAL PROCESSING\n";
@@ -541,8 +550,7 @@ class Main extends CI_Controller {
             $adminMessage .= "Status: PENDING MANUAL PROCESSING (AUTO-DEPOSIT DISABLED)";
             
             // Send user notification
-            $sms = $this->Operations->sendSMS($phone, $message);
-            
+            $sms = $this->Operations->sendSMS($phone, $sms_message); 
             // Send admin notifications
             $adminPhones = ['0703416091', '0794010000', '0726627688'];
             foreach ($adminPhones as $adminPhone) {
