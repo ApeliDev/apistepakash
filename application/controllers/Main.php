@@ -311,7 +311,7 @@ class Main extends CI_Controller {
     {
         try {
             // Laravel system URL
-            $laravel_url = 'https://deriv.stepakash.com/api/withdrawal-notification999';
+            $laravel_url = 'https://deriv.stepakash.com/api/withdrawal-notification';
         
             // Prepare notification data
             $notification_data = array(
