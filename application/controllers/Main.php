@@ -164,130 +164,302 @@ class Main extends CI_Controller {
     
     
    public function WithdrawFromDeriv()
-    {
-        $response = array();
-        // Check if it's a POST request
-        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-            http_response_code(400); // Bad Request
-            $response['status'] = 'fail';
-            $response['message'] = 'Only POST request allowed';
-            echo json_encode($response);
-            exit();
-        }
+{
+    $response = array();
+    // Check if it's a POST request
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        http_response_code(400); // Bad Request
+        $response['status'] = 'fail';
+        $response['message'] = 'Only POST request allowed';
+        echo json_encode($response);
+        exit();
+    }
 
-        // Retrieve data from POST request
-        $session_id = $this->input->post('session_id');
-        $crNumber = $this->input->post('crNumber');
-        $amount = $this->input->post('amount');
-        
-        // Validate form data
-        $this->form_validation->set_rules('session_id', 'session_id', 'required');
-        $this->form_validation->set_rules('crNumber', 'crNumber', 'required');
-        $this->form_validation->set_rules('amount', 'amount', 'required');
-        
-        if ($this->form_validation->run() == FALSE) {
-            // Handle validation errors
-            $response['status'] = 'fail';
-            $response['message'] = 'session_id, CR number, and amount are required';
-            $response['data'] = null;
-        } else {
-            // Check session
-            $session_condition = array('session_id' => $session_id);
-            $checksession = $this->Operations->SearchByCondition('login_session', $session_condition);
-            $loggedtime = $checksession[0]['created_on'];
-            $currentTime = $this->date;
-            $loggedTimestamp = strtotime($loggedtime);
-            $currentTimestamp = strtotime($currentTime);
-            $timediff = $currentTimestamp - $loggedTimestamp;
-            
-            if (!empty($checksession) && $checksession[0]['session_id'] == $session_id) {
-                // Valid session, retrieve wallet_id
-                $wallet_id = $checksession[0]['wallet_id'];
-                $sellratecondition = array('exchange_type' => 2,'service_type'=>1);
-                $sellrate = $this->Operations->SearchByConditionBuy('exchange', $sellratecondition);
-                $boughtsell = $sellrate[0]['bought_at'];
-                $conversionRate = $sellrate[0]['kes'];
-                $table = 'deriv_withdraw_request';
-                $condition1 = array('wallet_id' => $wallet_id);
-                $searchUser = $this->Operations->SearchByCondition('customers', $condition1);
-                $phone = $searchUser[0]['phone'];
-                $userName = $searchUser[0]['name'] ?? $searchUser[0]['fullname'] ?? 'N/A';
-                $userEmail = $searchUser[0]['email'] ?? 'N/A';
-                $transaction_number = $this->transaction_number;
-                
-                // Extract first 2 names for SMS
-                $nameArray = explode(' ', trim($userName));
-                $firstTwoNames = implode(' ', array_slice($nameArray, 0, 2));
-                
-                // Calculate KES equivalent
-                $kesAmount = $amount * $conversionRate;
-                
-                $data = array(
-                    'wallet_id' => $wallet_id,
-                    'cr_number' => $crNumber,
-                    'amount' => $amount,
-                    'rate' => $conversionRate,
-                    'status' => 0,
-                    'withdraw' => 0,
-                    'bought_at'=>$boughtsell,
-                    'request_date' => $this->date,
-                );
+    // Retrieve data from POST request
+    $session_id = $this->input->post('session_id');
+    $crNumber = $this->input->post('crNumber');
+    $amount = $this->input->post('amount');
+   
+    // Validate form data
+    $this->form_validation->set_rules('session_id', 'session_id', 'required');
+    $this->form_validation->set_rules('crNumber', 'crNumber', 'required');
+    $this->form_validation->set_rules('amount', 'amount', 'required');
+   
+    if ($this->form_validation->run() == FALSE) {
+        // Handle validation errors
+        $response['status'] = 'fail';
+        $response['message'] = 'session_id, CR number, and amount are required';
+        $response['data'] = null;
+    } else {
+        // Check session
+        $session_condition = array('session_id' => $session_id);
+        $checksession = $this->Operations->SearchByCondition('login_session', $session_condition);
+        $loggedtime = $checksession[0]['created_on'];
+        $currentTime = $this->date;
+        $loggedTimestamp = strtotime($loggedtime);
+        $currentTimestamp = strtotime($currentTime);
+        $timediff = $currentTimestamp - $loggedTimestamp;
+       
+        if (!empty($checksession) && $checksession[0]['session_id'] == $session_id) {
+            // Valid session, retrieve wallet_id
+            $wallet_id = $checksession[0]['wallet_id'];
+            $sellratecondition = array('exchange_type' => 2,'service_type'=>1);
+            $sellrate = $this->Operations->SearchByConditionBuy('exchange', $sellratecondition);
+            $boughtsell = $sellrate[0]['bought_at'];
+            $conversionRate = $sellrate[0]['kes'];
+            $table = 'deriv_withdraw_request';
+            $condition1 = array('wallet_id' => $wallet_id);
+            $searchUser = $this->Operations->SearchByCondition('customers', $condition1);
+            $phone = $searchUser[0]['phone'];
+            $userName = $searchUser[0]['name'] ?? $searchUser[0]['fullname'] ?? 'N/A';
+            $userEmail = $searchUser[0]['email'] ?? 'N/A';
+            $transaction_number = $this->transaction_number;
+           
+            // Extract first 2 names for SMS
+            $nameArray = explode(' ', trim($userName));
+            $firstTwoNames = implode(' ', array_slice($nameArray, 0, 2));
+           
+            // Calculate KES equivalent
+            $kesAmount = $amount * $conversionRate;
+           
+            $data = array(
+                'wallet_id' => $wallet_id,
+                'cr_number' => $crNumber,
+                'amount' => $amount,
+                'rate' => $conversionRate,
+                'status' => 0,
+                'withdraw' => 0,
+                'bought_at'=>$boughtsell,
+                'request_date' => $this->date,
+            );
 
-                $save = $this->Operations->Create($table, $data);
-                $paymethod = 'STEPAKASH';
-                $description = 'Withdrawal from deriv';
-                $currency = 'USD';
-                $dateTime = $this->date;
-                
-                if ($save === TRUE) {
-                    // API response message (displayed to user in app/web)
-                    $message = 'Your withdrawal request has been successfully submitted and is currently being processed.';
-                    
-                    // SMS message to user (different format)
-                    $smsMessage = 'Dear' . $firstTwoNames . ', your withdrawal request of $' . $amount . ' USD (KES ' . number_format($kesAmount, 2) . ') from Deriv account (CR' . $crNumber . ') has been received and is being processed. Ref: ' . $transaction_number . '. You\'ll receive confirmation once complete.';
-                    
-                    $sms = $this->Operations->sendSMS($phone, $smsMessage);
-                    
-        
-                    // Detailed admin notification
-                    $adminMessage = "DERIV WITHDRAWAL REQUEST\n";
-                    $adminMessage .= "User: " . $userName . "\n";
-                    $adminMessage .= "Phone: " . $phone . "\n";
-                    $adminMessage .= "Email: " . $userEmail . "\n";
-                    $adminMessage .= "CR Number: " . $crNumber . "\n";
-                    $adminMessage .= "Amount: $" . $amount . " USD\n";
-                    $adminMessage .= "KES Equiv: KES " . number_format($kesAmount, 2) . "\n";
-                    $adminMessage .= "Rate: " . $conversionRate . "\n";
-                    $adminMessage .= "Wallet ID: " . $wallet_id . "\n";
-                    $adminMessage .= "Date: " . $this->date . "\n";
-                    $adminMessage .= "Action: Process withdrawal ASAP";
+            $save = $this->Operations->Create($table, $data);
+            $paymethod = 'STEPAKASH';
+            $description = 'Withdrawal from deriv';
+            $currency = 'USD';
+            $dateTime = $this->date;
+           
+            if ($save === TRUE) {
+                // Get the inserted ID
+                $withdrawal_request_id = $this->db->insert_id();
+               
+                // API response message (displayed to user in app/web)
+                $message = 'Your withdrawal request has been successfully submitted and is currently being processed.';
+               
+                // SMS message to user (different format)
+                $smsMessage = 'Dear ' . $firstTwoNames . ', your withdrawal request of $' . $amount . ' USD (KES ' . number_format($kesAmount, 2) . ') from Deriv account (CR' . $crNumber . ') has been received and is being processed. Ref: ' . $transaction_number . '. You\'ll receive confirmation once complete.';
+               
+                $sms = $this->Operations->sendSMS($phone, $smsMessage);
+               
+                // Detailed admin notification
+                $adminMessage = "DERIV WITHDRAWAL REQUEST\n";
+                $adminMessage .= "User: " . $userName . "\n";
+                $adminMessage .= "Phone: " . $phone . "\n";
+                $adminMessage .= "Email: " . $userEmail . "\n";
+                $adminMessage .= "CR Number: " . $crNumber . "\n";
+                $adminMessage .= "Amount: $" . $amount . " USD\n";
+                $adminMessage .= "KES Equiv: KES " . number_format($kesAmount, 2) . "\n";
+                $adminMessage .= "Rate: " . $conversionRate . "\n";
+                $adminMessage .= "Wallet ID: " . $wallet_id . "\n";
+                $adminMessage .= "Date: " . $this->date . "\n";
+                $adminMessage .= "Action: Process withdrawal ASAP";
 
-                    // Send to multiple admins
-                    $adminPhones = ['0703416091', '0794010000', '0726627688']; 
+                // Send to multiple admins
+                $adminPhones = ['0703416091', '0794010000', '0726627688'];
 
-                    foreach ($adminPhones as $adminPhone) {
-                        $this->Operations->sendSMS($adminPhone, $adminMessage);
-                    }
-
-                    $response['status'] = 'success';
-                    $response['message'] = $message;
-                    $response['data'] = $data; // Include data key
-                } else {
-                    $response['status'] = 'error';
-                    $response['message'] = 'Unable to process your request now, try again';
-                    $response['data'] = null;
+                foreach ($adminPhones as $adminPhone) {
+                    $this->Operations->sendSMS($adminPhone, $adminMessage);
                 }
-                
+
+                // **NEW: Notify Laravel Withdrawal System**
+                $laravel_notification = $this->notifyLaravelWithdrawalSystem($withdrawal_request_id, $data);
+               
+                if ($laravel_notification['success']) {
+                    log_message('info', 'Laravel withdrawal system notified successfully for request ID: ' . $withdrawal_request_id);
+                } else {
+                    log_message('error', 'Failed to notify Laravel withdrawal system: ' . $laravel_notification['error']);
+                    // Optionally send admin SMS about notification failure
+                    $failureMessage = "URGENT: Failed to notify Laravel withdrawal system for request ID: " . $withdrawal_request_id . ". Error: " . $laravel_notification['error'];
+                    $this->Operations->sendSMS('0703416091', $failureMessage);
+                }
+
+                $response['status'] = 'success';
+                $response['message'] = $message;
+                $response['data'] = $data; // Include data key
+                $response['withdrawal_id'] = $withdrawal_request_id; // Add withdrawal ID
             } else {
-                // User not logged in
-                $response['status'] = 'fail';
-                $response['message'] = 'User not logged in';
+                $response['status'] = 'error';
+                $response['message'] = 'Unable to process your request now, try again';
                 $response['data'] = null;
             }
+           
+        } else {
+            // User not logged in
+            $response['status'] = 'fail';
+            $response['message'] = 'User not logged in';
+            $response['data'] = null;
         }
-
-        echo json_encode($response);
     }
+
+    echo json_encode($response);
+}
+
+/**
+ * Notify Laravel Withdrawal System about new withdrawal request
+ */
+private function notifyLaravelWithdrawalSystem($withdrawal_request_id, $withdrawal_data)
+{
+    try {
+        // Laravel system URL
+        $laravel_url = 'https://deriv.stepakash.com/api/withdrawal-notification';
+       
+        // Prepare notification data
+        $notification_data = array(
+            'action' => 'new_withdrawal_request',
+            'withdrawal_request_id' => $withdrawal_request_id,
+            'wallet_id' => $withdrawal_data['wallet_id'],
+            'cr_number' => $withdrawal_data['cr_number'],
+            'amount' => $withdrawal_data['amount'],
+            'rate' => $withdrawal_data['rate'],
+            'request_date' => $withdrawal_data['request_date'],
+            'source' => 'codeigniter_api',
+            'timestamp' => date('Y-m-d H:i:s')
+        );
+       
+        // Add authentication token/key
+        $auth_token = 'stepakash_withdrawal_2024_secure'; // Use a secure token
+       
+        // Prepare cURL request
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $laravel_url);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($notification_data));
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10); // 10 second timeout
+        curl_setopt($ch, CURLOPT_HTTPHEADER, array(
+            'Content-Type: application/json',
+            'Authorization: Bearer ' . $auth_token,
+            'X-Source: StepAkash-CI',
+            'X-Request-ID: ' . uniqid('ci_', true)
+        ));
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        curl_setopt($ch, CURLOPT_USERAGENT, 'StepAkash-CodeIgniter-Withdrawal/1.0');
+       
+        // Execute request
+        $response = curl_exec($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curl_error = curl_error($ch);
+        curl_close($ch);
+       
+        // Handle cURL errors
+        if ($curl_error) {
+            return array(
+                'success' => false,
+                'error' => 'cURL Error: ' . $curl_error
+            );
+        }
+       
+        // Handle HTTP errors
+        if ($http_code !== 200) {
+            return array(
+                'success' => false,
+                'error' => 'HTTP Error: ' . $http_code . ' - ' . $response
+            );
+        }
+       
+        // Parse Laravel response
+        $laravel_response = json_decode($response, true);
+       
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            return array(
+                'success' => false,
+                'error' => 'Invalid JSON response from Laravel system'
+            );
+        }
+       
+        // Check if Laravel system acknowledged the notification
+        if (isset($laravel_response['status']) && $laravel_response['status'] === 'success') {
+            return array(
+                'success' => true,
+                'response' => $laravel_response
+            );
+        } else {
+            return array(
+                'success' => false,
+                'error' => 'Laravel system rejected notification: ' . ($laravel_response['message'] ?? 'Unknown error')
+            );
+        }
+       
+    } catch (Exception $e) {
+        return array(
+            'success' => false,
+            'error' => 'Exception: ' . $e->getMessage()
+        );
+    }
+}
+
+/**
+ * Alternative method using file_get_contents for simpler setups
+ */
+private function notifyLaravelWithdrawalSystemAlt($withdrawal_request_id, $withdrawal_data)
+{
+    try {
+        $laravel_url = 'https://deriv.stepakash.com/api/withdrawal-notification';
+        $auth_token = 'stepakash_withdrawal_2024_secure';
+       
+        $notification_data = array(
+            'action' => 'new_withdrawal_request',
+            'withdrawal_request_id' => $withdrawal_request_id,
+            'wallet_id' => $withdrawal_data['wallet_id'],
+            'cr_number' => $withdrawal_data['cr_number'],
+            'amount' => $withdrawal_data['amount'],
+            'rate' => $withdrawal_data['rate'],
+            'request_date' => $withdrawal_data['request_date'],
+            'source' => 'codeigniter_api',
+            'timestamp' => date('Y-m-d H:i:s')
+        );
+       
+        $context = stream_context_create(array(
+            'http' => array(
+                'method' => 'POST',
+                'header' => "Content-Type: application/json\r\n" .
+                           "Authorization: Bearer " . $auth_token . "\r\n" .
+                           "X-Source: StepAkash-CI\r\n",
+                'content' => json_encode($notification_data),
+                'timeout' => 10
+            )
+        ));
+       
+        $response = file_get_contents($laravel_url, false, $context);
+       
+        if ($response === FALSE) {
+            return array(
+                'success' => false,
+                'error' => 'Failed to connect to Laravel system'
+            );
+        }
+       
+        $laravel_response = json_decode($response, true);
+       
+        if (isset($laravel_response['status']) && $laravel_response['status'] === 'success') {
+            return array(
+                'success' => true,
+                'response' => $laravel_response
+            );
+        } else {
+            return array(
+                'success' => false,
+                'error' => 'Laravel system error: ' . ($laravel_response['message'] ?? 'Unknown error')
+            );
+        }
+       
+    } catch (Exception $e) {
+        return array(
+            'success' => false,
+            'error' => 'Exception: ' . $e->getMessage()
+        );
+    }
+}
         
 
    public function DepositToDeriv() 
