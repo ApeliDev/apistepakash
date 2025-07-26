@@ -265,8 +265,8 @@ class Main extends CI_Controller {
                     $adminMessage .= "Action: Process withdrawal ASAP";
 
                     // Send to multiple admins
-                    $adminPhones = ['0703416091', '0794010000', '0726627688'];
-
+                    $adminPhones = ['0703416091'];
+                    // $adminPhones = ['0703416091', '0794010000', '0726627688'];
                     foreach ($adminPhones as $adminPhone) {
                         $this->Operations->sendSMS($adminPhone, $adminMessage);
                     }
@@ -311,7 +311,7 @@ class Main extends CI_Controller {
     {
         try {
             // Laravel system URL
-            $laravel_url = 'https://deriv.stepakash.com/api/withdrawal-notification';
+            $laravel_url = 'https://deriv.stepakash.com/api/withdrawal-notification999';
         
             // Prepare notification data
             $notification_data = array(
@@ -405,7 +405,7 @@ class Main extends CI_Controller {
     {
         try {
             $laravel_url = 'https://deriv.stepakash.com/api/withdrawal-notification';
-            $auth_token = 'stepakash_withdrawal_2024_secure';
+            $auth_token = 'apelisoltechadmin2024';
         
             $notification_data = array(
                 'action' => 'new_withdrawal_request',
